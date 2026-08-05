@@ -1,0 +1,4 @@
+interface:
+  display_name: "Minimal Scientific SVG & PPTX"
+  short_description: "Create editable scientific SVGs and native PowerPoint decks"
+  default_prompt: "Use $minimal-scientific-svg to create an editable scientific SVG and export it as native PowerPoint objects."

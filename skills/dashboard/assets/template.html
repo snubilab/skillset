@@ -1,0 +1,1243 @@
+<meta charset="utf-8">
+<title>Results dashboard — template</title>
+<!--
+  Self-contained dashboard template (tabbed, token-themed).
+  Replace:
+   - CONFIG (VARS, METRICS, BASELINE, TILES) near the top of the last <script>
+   - COPY near the top of the last <script> — one place for user-facing labels and empty states
+   - the CONTENTS of <script id="framingdata"> — 3–6 scope cards; overview renders from data
+   - the CONTENTS of <script id="unitdata"> — semantic research-unit/workstream cards, or []
+   - the CONTENTS of <script id="data"> — numeric per-item rows, or [] when `unitdata` is non-empty.
+     There is no injection marker
+     to substitute: one inside a JSON block would make the block invalid JSON, and a builder replacing
+     a marker that does not exist silently ships THESE DEMO NUMBERS as if they were results.
+   - optional media map in <script id="imgdata"> (same: replace the block's contents)
+   - the header copy, verdict + callout prose, and the palette
+  Rules (see SKILL.md): inline everything — no external URLs/fonts/fetch/CDN.
+  Keep BOTH themes. VALIDATE categorical hues (--c-0/1/2) with the dataviz
+  validator (scripts/validate_palette.js) before shipping.
+-->
+<style>
+  :root{
+    --font-sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --bg:#e9eef3;--surface:#ffffff;--surface-2:#f4f7fa;
+    --ink:#15202b;--muted:#566472;--faint:#5f6b77;
+    --border:#d6e0e9;--border-strong:#c2cedb;
+    --accent:#0e7c86;--accent-ink:#0a5a62;
+    /* categorical series hues — VALIDATE (colorblind-safe) before shipping */
+    --g-a:#0e7c86;--g-b:#6d4aa8;--c-0:#2563C4;--c-1:#E07A0F;--c-2:#0E9488;
+    /* status inks carry TEXT (badges, status pills, best-value, delta) at 12–15px, so they are held to
+       4.5:1 on their own -bg AND on --surface. The light set was a chart palette used as type and failed
+       both — measured 2.2:1 on the absent badge, 2.9 on partial, 3.5 on pass. */
+    --ok:#157a4b;--ok-bg:#e6f5ec;--warn:#855c08;--warn-bg:#f8efd8;
+    --good:#157a4b;--bad:#c0392b;--absent:#5c6873;--absent-bg:#eef2f5;
+    --shadow:0 1px 2px rgba(20,35,50,.06),0 4px 16px rgba(20,35,50,.05);
+    --radius:10px;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0b1118;--surface:#141d26;--surface-2:#1a2530;
+    --ink:#e6edf4;--muted:#93a2b1;--faint:#7d8b99;
+    --border:#263340;--border-strong:#33424f;
+    --accent:#45b6c2;--accent-ink:#7fd3db;--g-a:#45b6c2;--g-b:#a78be0;
+    --c-0:#5590D0;--c-1:#C9821F;--c-2:#35A89A;
+    --ok:#40cc86;--ok-bg:#123021;--warn:#e0aa3c;--warn-bg:#33280d;
+    --good:#40cc86;--bad:#e4695c;--absent:#93a2b1;--absent-bg:#1c2732;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0b1118;--surface:#141d26;--surface-2:#1a2530;--ink:#e6edf4;--muted:#93a2b1;--faint:#7d8b99;
+    --border:#263340;--border-strong:#33424f;--accent:#45b6c2;--accent-ink:#7fd3db;--g-a:#45b6c2;--g-b:#a78be0;
+    --c-0:#5590D0;--c-1:#C9821F;--c-2:#35A89A;
+    --ok:#40cc86;--ok-bg:#123021;--warn:#e0aa3c;--warn-bg:#33280d;--good:#40cc86;--bad:#e4695c;--absent:#93a2b1;--absent-bg:#1c2732;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --bg:#e9eef3;--surface:#ffffff;--surface-2:#f4f7fa;--ink:#15202b;--muted:#566472;--faint:#5f6b77;
+    --border:#d6e0e9;--border-strong:#c2cedb;--accent:#0e7c86;--accent-ink:#0a5a62;
+    --c-0:#2563C4;--c-1:#E07A0F;--c-2:#0E9488;
+    --ok:#157a4b;--ok-bg:#e6f5ec;--warn:#855c08;--warn-bg:#f8efd8;--good:#157a4b;--bad:#c0392b;--absent:#5c6873;--absent-bg:#eef2f5;
+    --shadow:0 1px 2px rgba(20,35,50,.06),0 4px 16px rgba(20,35,50,.05);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+  .page{max-width:1240px;margin:0 auto;padding:32px 24px 80px}
+  .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+  a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid transparent}
+  a:hover{border-bottom-color:currentColor}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+  /* Nothing here conveys state by animating, so motion is pure decoration — honour the OS setting.
+     The skill has required this from the start and the template never implemented it. */
+  @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}
+    html{scroll-behavior:auto}}
+
+  /* Header */
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+  .eyebrow{font-size:13.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);font-weight:700}
+  h1{font-size:clamp(24px,3.2vw,34px);line-height:1.12;margin:10px 0 8px;letter-spacing:-.02em;text-wrap:balance}
+  .lede{color:var(--muted);max-width:74ch;font-size:17px;margin:0}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:16px;font-size:14.5px;color:var(--muted);align-items:center}
+  .meta-row .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block;margin-right:7px;vertical-align:middle}
+  .toggle,.navbtn{border:1px solid var(--border-strong);background:var(--surface);color:var(--muted);border-radius:8px;padding:7px 12px;font:inherit;font-size:14px;cursor:pointer}
+  .toggle:hover,.navbtn:hover{border-color:var(--accent);color:var(--ink)}
+
+  /* Verdict */
+  .verdict{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:15px 18px;margin-top:22px;box-shadow:var(--shadow)}
+  .verdict.warn{border-left-color:var(--warn)}
+  .verdict .vdot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--accent);margin-top:6px;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 20%,transparent)}
+  .verdict h3{margin:0 0 3px;font-size:16.5px;font-weight:640}
+  .verdict p{margin:0;font-size:15px;color:var(--muted);line-height:1.75}
+
+  /* Tabs */
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin:20px 0 0;border-bottom:1px solid var(--border)}
+  .tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 16px;font-size:15.5px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;font-family:inherit}
+  .tabs button:hover{color:var(--ink);background:var(--surface-2)}
+  .tabs button.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
+  /* Optional tab GROUPS: wrap buttons in <span class="tabgroup" role="presentation" data-glabel="…"
+     style="--gc:var(--g-a)">. Redundant encoding on purpose — label + divider + colour, never colour alone
+     (a hue-only grouping disappears for a colourblind reader). Ungrouped tabs keep working unchanged. */
+  .tabgroup{display:flex;align-items:flex-end;gap:4px}
+  .tabgroup::before{content:attr(data-glabel);font-family:var(--font-mono);font-size:11.5px;letter-spacing:.1em;
+    text-transform:uppercase;font-weight:700;color:var(--gc,var(--faint));opacity:.85;padding:0 8px 13px 2px;white-space:nowrap}
+  .tabgroup+.tabgroup{margin-left:10px;padding-left:14px;border-left:1px solid var(--border)}
+  .tabgroup button.active{color:var(--gc);border-bottom-color:var(--gc)}
+  .tabgroup button:hover{color:var(--gc)}
+  @media(max-width:640px){.tabgroup::before{display:none}.tabgroup+.tabgroup{margin-left:0;padding-left:0;border-left:0}}
+  .pane[hidden]{display:none}
+
+  section{margin-top:30px}
+  h2{font-size:14.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+
+  /* Tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 16px 14px;box-shadow:var(--shadow)}
+  .tile .tnum{font-family:var(--font-mono);font-size:34px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+  .tile .lab{font-size:14px;color:var(--muted);margin-top:8px}
+  .tile.alert .tnum{color:var(--warn)}.tile.good .tnum{color:var(--ok)}
+
+  /* Callouts */
+  .callouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .callout{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+  .callout.warn{border-left-color:var(--warn)}
+  .callout h3{margin:0 0 5px;font-size:15.5px;letter-spacing:-.01em}
+  .callout p{margin:0;font-size:14.5px;color:var(--muted)}
+
+  /* Semantic unit/workstream detail cards — use when rows are research units, capabilities, workstreams,
+     or implementation slices rather than numeric samples. Numeric DATA still owns distributions/delta/table. */
+  .unit-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .unit-card{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:11px}
+  .unit-card[data-state="blocked"],.unit-card[data-state="차단"]{border-left-color:var(--bad)}
+  .unit-card[data-state="partial"],.unit-card[data-state="진행 중"],.unit-card[data-state="보류"]{border-left-color:var(--warn)}
+  .unit-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .unit-title{font-weight:700;font-size:16px;line-height:1.25}
+  .unit-sub{font-size:13.5px;color:var(--faint);margin-top:2px}
+  .unit-summary{font-size:14.5px;color:var(--muted);line-height:1.65}
+  .unit-label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-bottom:4px}
+  .unit-card ul{margin:0;padding-left:18px;color:var(--muted);font-size:14px}
+  .unit-card li+li{margin-top:3px}
+  .unit-gate{background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 10px;color:var(--muted);font-size:14px}
+  .unit-tech{display:flex;flex-wrap:wrap;gap:6px}
+  .unit-tech code{font-size:12.5px}
+
+  /* Cards + charts */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .chart-t{font-size:14.5px;font-weight:600;margin-bottom:1px}.chart-s{font-size:13.5px;color:var(--faint);margin-bottom:10px}
+  svg{display:block;width:100%;overflow:visible}.axis{font-family:var(--font-mono);font-size:11.5px;fill:var(--faint)}
+  .gridline{stroke:var(--border);stroke-width:1}.baserule{stroke:var(--faint);stroke-width:1;stroke-dasharray:3 3}
+  .foot{font-size:13.5px;color:var(--faint);margin-top:8px;line-height:1.7}
+  .note{font-size:14px;color:var(--muted);background:var(--surface-2);border-radius:8px;padding:10px 12px;margin-top:12px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted);margin:2px 0 14px}.legend span{display:flex;align-items:center;gap:7px}
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:2px;vertical-align:middle}
+
+  /* Summary table */
+  table{border-collapse:collapse;width:100%;font-size:15px}
+  /* Align by CONTENT, not by column index. Right-aligning every column after the first assumes every
+     one holds a figure; a table with a prose column (a verdict, a "how it was tested" cell) then renders
+     sentences right-aligned and, if they also get .num, in a monospace column. Right-align + tabular
+     figures apply to .num cells; everything else reads left. */
+  .summary th,.summary td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  .summary td.num,.summary th.num{text-align:right}
+  /* A figure column's HEADER carries .num too so it lands over its own numbers — a left-aligned header
+     above right-aligned figures reads as a mis-built table. font-family resets because .num is mono and
+     a column label is not a figure. */
+  .summary th.num,.twrap th.num{font-family:var(--font-sans)}
+  .summary thead th{font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  .summary tbody tr:last-child td{border-bottom:none}
+  .best{color:var(--good);font-weight:600}.baseline td{color:var(--faint)}
+
+  /* Tooltip */
+  .tip{position:fixed;pointer-events:none;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .1s;z-index:20}
+  .tip .k{color:var(--faint)}.tip b{font-family:var(--font-mono)}
+
+  /* Filter bar */
+  .filters{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;margin-bottom:14px}
+  .fgroup{display:flex;flex-direction:column;gap:6px}
+  .fgroup .flab{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:14px;padding:5px 11px;border-radius:999px;border:1px solid var(--border-strong);background:var(--surface);color:var(--muted);cursor:pointer;user-select:none;white-space:nowrap;transition:all .12s ease;font-family:inherit}
+  .chip:hover{border-color:var(--accent);color:var(--ink)}
+  .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  @media(prefers-color-scheme:dark){.chip[aria-pressed="true"]{color:#06232a}}
+  :root[data-theme="light"] .chip[aria-pressed="true"]{color:#fff}
+  :root[data-theme="dark"] .chip[aria-pressed="true"]{color:#06232a}
+  .search{flex:1 1 200px;min-width:180px}
+  .search input{width:100%;padding:8px 12px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--ink);font-family:inherit;font-size:15px}
+  .search input::placeholder{color:var(--faint)}
+  .count-note{font-size:14px;color:var(--muted);margin:0 0 10px;font-family:var(--font-mono)}
+
+  /* Per-item table */
+  /* Tall enough to read without constant scrolling: a fixed 460px box turned every long table into a
+     porthole. Viewport-relative so it grows on big screens, capped so it never exceeds one screen. */
+  .twrap{overflow:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow);max-height:min(78vh,1100px)}
+  .twrap table{font-size:14.5px}
+  /* Same content-not-index rule as .summary. This box also holds the PLAN table, whose goal/status/
+     evidence columns are prose: aligning "everything after the first column" right rendered whole
+     sentences flush right, and the design kit had grown per-cell text-align overrides to fight it. */
+  .twrap thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--border-strong);white-space:nowrap;z-index:2;cursor:pointer}
+  .twrap tbody td{padding:9px 12px;border-bottom:1px solid var(--border);text-align:left}
+  .twrap th.num,.twrap td.num{text-align:right}
+  .twrap tbody tr:hover td{background:var(--surface-2)}
+  tr.hidden{display:none}
+  .pill{display:inline-block;font-size:13px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap;line-height:1.35;color:#fff}
+  @media(prefers-color-scheme:dark){.pill{color:#08151b}}
+  :root[data-theme="light"] .pill{color:#fff}:root[data-theme="dark"] .pill{color:#08151b}
+  /* role pills (categorical labels) — themed inline so no extra tokens needed */
+  .role.substrate{background:#3b6ea5}.role.reward{background:var(--accent)}.role.eval{background:#7a5ea8}.role.source{background:#2f8f5b}.role.probe{background:#7c8794}
+  @media(prefers-color-scheme:dark){.role.substrate{background:#6fa2d6}.role.eval{background:#b199dc}.role.source{background:#5cc389}.role.probe{background:#93a2b1}}
+  :root[data-theme="light"] .role.substrate{background:#3b6ea5}:root[data-theme="light"] .role.eval{background:#7a5ea8}:root[data-theme="light"] .role.source{background:#2f8f5b}:root[data-theme="light"] .role.probe{background:#7c8794}
+  :root[data-theme="dark"] .role.substrate{background:#6fa2d6}:root[data-theme="dark"] .role.eval{background:#b199dc}:root[data-theme="dark"] .role.source{background:#5cc389}:root[data-theme="dark"] .role.probe{background:#93a2b1}
+  /* presence badges (T/S/L/M-style: present / partial / absent) */
+  .gt{display:inline-flex;gap:4px}
+  .gtb{width:22px;height:20px;border-radius:5px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-mono);border:1px solid transparent}
+  .gtb.p{background:var(--ok-bg);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 30%,transparent)}
+  .gtb.h{background:var(--warn-bg);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+  .gtb.a{background:var(--absent-bg);color:var(--absent)}
+  /* verification / provenance badges */
+  .vb{display:inline-flex;align-items:center;gap:5px;font-size:13px;font-weight:600;white-space:nowrap}
+  .vb::before{content:"";width:8px;height:8px;border-radius:50%;display:inline-block}
+  .vb.ok{color:var(--ok)}.vb.ok::before{background:var(--ok)}
+  .vb.warn{color:var(--warn)}.vb.warn::before{background:var(--warn)}
+  .vb.unv{color:var(--faint)}.vb.unv::before{border:1px dashed var(--faint)}
+  /* design-kit layout (Components tab — delete tab when publishing) */
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:8px}
+  .sw{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface);font-size:12.5px}
+  .sw i{display:block;height:34px}
+  .sw span{display:block;padding:5px 8px;color:var(--muted);font-family:var(--font-mono)}
+  .kit-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .kit-note{font-size:13.5px;color:var(--faint);margin-top:6px;font-family:var(--font-mono)}
+  /* delta / trend indicators */
+  .delta{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:3px}
+  .delta::before{font-size:10.5px}
+  .delta.up{color:var(--good)}.delta.up::before{content:"▲"}
+  .delta.down{color:var(--bad)}.delta.down::before{content:"▼"}
+  .delta.flat{color:var(--faint)}.delta.flat::before{content:"—"}
+  /* meter / progress bar */
+  .meter{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted)}
+  .meter .track{flex:1;height:8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;min-width:80px}
+  .meter .fill{display:block;height:100%;background:var(--accent);border-radius:999px}
+  .meter .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;color:var(--ink);min-width:38px;text-align:right}
+  /* semantic status pills (pass / partial / fail) */
+  .pill.ok{background:var(--ok)}.pill.mid{background:var(--warn)}.pill.no{background:var(--bad)}
+  /* inline code / config-key reference */
+  .inline-code,code{font-family:var(--font-mono);font-size:13.5px;background:var(--surface-2);padding:1px 5px;border-radius:4px;border:1px solid var(--border);color:var(--ink)}
+  /* group header row inside a data table */
+  .grouprow td{background:var(--surface-2);font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);padding:8px 12px;border-bottom:1px solid var(--border-strong);text-align:left}
+
+  /* Media viewer */
+  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;font-size:14px;color:var(--muted)}
+  .controls select{font:inherit;font-size:14px;background:var(--surface);color:var(--ink);border:1px solid var(--border-strong);border-radius:7px;padding:5px 8px}
+  .panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+  .panel{display:flex;flex-direction:column;gap:7px}
+  /* contain, NOT cover: the panels exist to be compared, and `cover` silently crops a non-square image —
+     exactly where a defect near the edge of the frame would be. Letterboxing on black shows the crop
+     that was NOT taken; a silent crop shows a lie. */
+  .panel img{width:100%;max-width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;border:1px solid var(--border-strong);background:#000}
+  /* A panel whose src is missing must SAY so. A bare <img src=""> renders the browser's broken-image
+     glyph, which reads as "the image failed to load" — indistinguishable from a real load failure. */
+  .panel .noimg{width:100%;aspect-ratio:1;border-radius:8px;border:1px dashed var(--border-strong);
+    background:var(--surface-2);display:flex;align-items:center;justify-content:center;text-align:center;
+    padding:8px;font-family:var(--font-mono);font-size:12.5px;color:var(--muted)}
+  .panel .plabel{font-size:12.5px;font-weight:640;text-transform:uppercase;color:var(--muted);display:flex;gap:6px;align-items:center}
+  .sample-meta{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-family:var(--font-mono);font-size:13.5px;color:var(--muted)}
+  .sample-meta b{color:var(--ink);font-weight:600}
+  .panel .pmetric{font-family:var(--font-mono);font-size:12.5px;color:var(--faint)}
+  .panel.best-img img{outline:2px solid var(--good);outline-offset:1px}
+
+  /* Collapsible sources */
+  details.sources{margin-top:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}
+  details.sources summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:14.5px}
+  details.sources[open] summary{border-bottom:1px solid var(--border)}
+  .src-list{padding:12px 16px;font-size:13.5px;color:var(--muted)}.src-list div{margin-bottom:7px}
+
+  /* ===== Experiment plan / backlog table (data-driven; one JSON block + planView()) ===== */
+  .plan td.goal{color:var(--muted);font-size:14px;max-width:52ch}   /* 34ch stacked goals 5 lines deep */
+  .plan td.task{font-weight:600}
+  .plan .when{font-family:var(--font-mono);font-size:13px;color:var(--muted);display:block;margin-top:3px}
+  .plan a.notelink{color:var(--accent-ink);text-decoration:none;border-bottom:1px dotted var(--accent);
+    font-size:13.5px;cursor:pointer;white-space:nowrap}
+  .plan a.notelink:hover{background:var(--surface-2)}
+  .plan a.notelink+a.notelink{margin-left:8px}
+  .plan td.cost{font-family:var(--font-mono);font-size:13.5px;color:var(--muted);white-space:nowrap}
+  .plan tr.done td.task{color:var(--muted);font-weight:500}
+  /* ===== Dated narrative pane: canonical RadClaw sticky calendar ===== */
+  .notes-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:18px;align-items:start}
+  .notes-main{min-width:0}
+  .notes-side{position:sticky;top:16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;box-shadow:var(--shadow)}
+  @media(max-width:820px){.notes-layout{grid-template-columns:1fr}.notes-side{order:-1;position:static}}
+  .notecal{user-select:none}
+  .notecal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .notecal-title{font-weight:700;font-size:15.5px}
+  .notecal-nav{border:0;background:var(--surface-2);color:var(--ink);border-radius:5px;padding:3px 8px;cursor:pointer;font:inherit;line-height:1}
+  .notecal-nav:hover{color:var(--ink);background:var(--border)}
+  .notecal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .notecal-dow{text-align:center;font-size:11.5px;color:var(--faint);padding:4px 0}
+  .notecal-day{border:0;background:transparent;color:var(--muted);font:11px var(--font-mono);text-align:center;border-radius:5px;padding:5px 0}
+  .notecal-day.has{cursor:pointer;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font-weight:700}
+  .notecal-day.has:hover{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+  /* Solid accent fill needs theme-dependent ink, like the active chip: --accent is a dark teal in light
+     mode but a light cyan in dark mode, so a hard-coded #fff put the selected day at 2.4:1 in dark. */
+  .notecal-day.has.sel{background:var(--accent);color:#fff}
+  @media(prefers-color-scheme:dark){.notecal-day.has.sel{color:#06232a}}
+  :root[data-theme="light"] .notecal-day.has.sel{color:#fff}
+  :root[data-theme="dark"] .notecal-day.has.sel{color:#06232a}
+  .notes-filter{margin:0 0 12px;font-size:14.5px;color:var(--muted)}
+  .notes-filter a{color:var(--accent);cursor:pointer;text-decoration:underline}
+  .note-status-row{margin:0 0 12px}.note-status-row .flab{margin-bottom:6px}
+  .note-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+  .note-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .note-meta{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;flex:none}
+  @media(max-width:640px){.note-head{flex-direction:column;align-items:stretch}.note-meta{justify-content:flex-start}}
+  /* A bare .pill is white-on-white: .pill sets color:#fff and only its MODIFIER classes carry a
+     background. The stamp needs its own contrast, and it carries the update TIME as well as the date. */
+  .note-stamp{font-family:var(--font-mono);font-size:12.5px;font-variant-numeric:tabular-nums;
+    color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent);
+    border:1px solid color-mix(in srgb,var(--accent) 28%,transparent);
+    border-radius:999px;padding:3px 10px;white-space:nowrap;flex:none}
+  .note-stamp .t{color:var(--muted);margin-left:6px}
+  .status-badge{display:inline-block;font-size:12.5px;font-weight:700;line-height:1.35;padding:3px 9px;
+    border-radius:999px;border:1px solid transparent;white-space:nowrap}
+  .status-badge[data-state="예정"]{color:#425466;background:#e8eef4;border-color:#b9c7d5}
+  .status-badge[data-state="진행 중"],.status-badge[data-state="조사 중"]{color:#2457a6;background:#e7efff;border-color:#b7caf0}
+  .status-badge[data-state="완료"],.status-badge[data-state="해결"]{color:#157a4b;background:#e6f5ec;border-color:#abd9bf}
+  .status-badge[data-state="중단"],.status-badge[data-state="차단"]{color:#a83226;background:#fdecea;border-color:#efb9b3}
+  .status-badge[data-state="보류"],.status-badge[data-state="완화"]{color:#855c08;background:#f8efd8;border-color:#dec68d}
+  .status-badge[data-state="신규"]{color:#683a99;background:#f2eafa;border-color:#d4bce8}
+  .status-badge[data-state="모니터링"]{color:#0a6d72;background:#e1f4f3;border-color:#a9d8d5}
+  .note-title{font-size:14.5px;font-weight:600}
+  .note-sec-h{color:var(--accent);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em}
+  .note-block{margin:8px 0 0 10px;padding:8px 10px;border-left:2px solid var(--border-strong)}
+  .note-block-h{color:var(--muted);font-weight:700;font-size:12.5px;letter-spacing:.03em}
+  .note-card ul{margin:5px 0 0;padding-left:18px;font-size:14.5px;color:var(--muted)}
+  .note-card li{margin:3px 0}
+  /* Every entry MUST open with its conclusion — the reader gets the finding before the process. */
+  .note-key{margin-top:10px;padding:9px 12px;border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+    background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--ink);font-size:15px;font-weight:600;line-height:1.5}
+  .note-details{margin-top:11px;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--surface-2,var(--surface))}
+  .note-details>summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;list-style:none;outline:none}
+  .note-details>summary::-webkit-details-marker{display:none}
+  .note-details>summary::before{content:"▸ ";color:var(--faint)}
+  .note-details[open]>summary::before{content:"▾ "}
+  /* A note table with many columns, or one long unbroken token (a URL, a hash, a path), pushed the whole
+     BODY sideways — measured 492px of horizontal page scroll. The table scrolls inside its own box and
+     long tokens break; the page never scrolls sideways. */
+  .dtwrap{overflow-x:auto;max-width:100%}
+  .datatable{margin-top:8px;width:100%;border-collapse:collapse;font-size:14.5px}
+  .datatable th,.datatable td{text-align:left;white-space:normal;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  .note-card li,.note-key,.datatable td{overflow-wrap:anywhere}
+  .datatable th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:600}
+  /* --ink, not --fg: --fg is not a token in this file, so the colour was invalid-at-computed-value and
+     only looked right because `color` inherits. A token that does not exist is a fix waiting to fail. */
+  #toTop{position:fixed;right:24px;bottom:24px;width:42px;height:42px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:20px;line-height:1;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.14)}
+  #toTop.show{opacity:1;pointer-events:auto}
+  #toTop:hover{border-color:var(--accent);color:var(--accent)}
+  #record-fatal{position:fixed;inset:16px;z-index:1000;overflow:auto;padding:22px;border:3px solid #a83226;
+    border-radius:12px;background:#fff1ef;color:#641c15;box-shadow:0 12px 40px rgba(80,0,0,.35);font:600 15px/1.5 var(--font-sans)}
+  #record-fatal strong{display:block;font-size:20px;margin-bottom:8px}#record-fatal pre{white-space:pre-wrap;font:13px/1.45 var(--font-mono)}
+
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--border);font-size:13.5px;color:var(--faint)}
+  @media(max-width:640px){.page{padding:24px 14px 60px}}
+</style>
+
+<div class="page">
+  <header>
+    <div>
+      <div class="eyebrow">EYEBROW · CONTEXT</div>
+      <h1>Dashboard title — the question it answers</h1>
+      <p class="lede">One sentence on scope, n, setup — what was compared and how the metrics were computed.</p>
+      <div class="meta-row">
+        <span><span class="dot"></span>Updated YYYY-MM-DD · run/config id</span>
+        <span>metric definitions verified against the source report</span>
+      </div>
+    </div>
+    <button class="toggle" id="themeBtn" data-copy="theme">◐ Theme</button>
+  </header>
+
+  <div class="verdict" id="verdict">
+    <div class="vdot"></div>
+    <div><h3>Headline finding, stated plainly</h3>
+      <p>One honest paragraph — include a null/negative result if that is the truth. If variants overlap, say "near-identical" here rather than zooming an axis to fake a gap.</p></div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <span class="tabgroup" role="presentation" data-glabel="Results" data-copy-group="results" style="--gc:var(--g-a)">
+      <button class="active" role="tab" aria-selected="true" data-pane="pane-overview" data-copy-tab="overview">Overview</button>
+      <button role="tab" aria-selected="false" data-pane="pane-item" data-copy-tab="detail">Per-item</button>
+      <button role="tab" aria-selected="false" data-pane="pane-samples" id="tabSamples" data-copy-tab="samples">Samples</button>
+    </span>
+    <span class="tabgroup" role="presentation" data-glabel="Record" data-copy-group="record" style="--gc:var(--g-b)">
+      <button role="tab" aria-selected="false" data-pane="pane-plan" id="tabPlan" data-copy-tab="plan" hidden>Plan</button>
+      <button role="tab" aria-selected="false" data-pane="pane-notes" id="tabNotes" data-copy-tab="notes" hidden>Notes</button>
+      <button role="tab" aria-selected="false" data-pane="pane-issues" id="tabIssues" data-copy-tab="issues" hidden>Issues</button>
+    </span>
+    <span class="tabgroup" role="presentation" data-glabel="Build" data-copy-group="build" style="--gc:var(--faint)">
+      <button role="tab" aria-selected="false" data-pane="pane-kit" data-copy-tab="components">Components</button>
+    </span>
+  </div>
+
+  <!-- ===== OVERVIEW (entity-level) ===== -->
+  <div id="pane-overview" class="pane" role="tabpanel">
+    <!-- Frame the whole work/project before the numbers. Replace framingdata; keep 3–6 filled cards. -->
+    <section data-component="framing">
+      <h2 data-copy-section="overview">Overview</h2>
+      <div class="grid2" id="framingCards">
+      </div>
+    </section>
+
+    <section id="tilesSection">
+      <h2 data-copy-section="glance">At a glance</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section id="summarySection">
+      <h2 data-copy-section="summary">Summary</h2>
+      <div class="card" style="margin-bottom:16px">
+        <table class="summary" id="summaryTbl"><thead></thead><tbody></tbody></table>
+        <div class="foot">How the metrics were computed / what the highlighted best value means.</div>
+      </div>
+      <div class="grid2">
+        <div class="card"><div class="chart-t">Metric A by entity</div><div class="chart-s">Zoomed axis if near-identical (note it).</div><svg id="barA" viewBox="0 0 420 210"></svg></div>
+        <div class="card"><div class="chart-t">Metric B by entity</div><div class="chart-s">Baseline shown as a dashed reference line.</div><svg id="barB" viewBox="0 0 420 210"></svg></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-copy-section="findings">Findings</h2>
+      <div class="callouts">
+        <div class="callout"><h3>Finding one</h3><p>Short qualitative takeaway. Prefer plain claims tied to the numbers above.</p></div>
+        <div class="callout"><h3>Finding two</h3><p>Another takeaway — what helped, what did not.</p></div>
+        <div class="callout warn"><h3>Caveat / risk</h3><p>An honest limitation, contamination, or unverified assumption worth flagging.</p></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== PER-ITEM (detail) ===== -->
+  <div id="pane-item" class="pane" role="tabpanel" hidden>
+    <section id="unitSection" hidden>
+      <h2 data-copy-section="units">Units</h2>
+      <div class="chart-s" data-copy="unitHelp" style="margin-bottom:12px">Role, current judgment, evidence stage, blockers, and the next completion gate for each unit.</div>
+      <div class="unit-grid" id="unitGrid"></div>
+    </section>
+
+    <section data-numeric-detail>
+      <h2 data-copy-section="distributions">Distributions</h2>
+      <div class="legend" id="legend"></div>
+      <div class="grid2">
+        <div class="card"><div class="chart-t">Metric A distribution</div><div class="chart-s">Overlap = no separation.</div><svg id="distA" viewBox="0 0 420 220"></svg></div>
+        <div class="card"><div class="chart-t">Metric B distribution</div><div class="chart-s">…</div><svg id="distB" viewBox="0 0 420 220"></svg></div>
+      </div>
+    </section>
+
+    <section data-numeric-detail>
+      <h2 data-copy-section="delta">Per-item delta vs baseline</h2>
+      <div class="card">
+        <div class="chart-s" data-copy="deltaHelp">Each mark = one item, sorted. Above 0 = better than baseline.</div>
+        <div class="controls"><label><span data-copy="metricLabel">Metric</span> <select id="deltaMetric"></select></label></div>
+        <svg id="deltaChart" viewBox="0 0 1040 260"></svg>
+        <div class="note" id="deltaNote"></div>
+      </div>
+    </section>
+
+    <section data-numeric-detail>
+      <h2 data-copy-section="itemTable">Per-item table</h2>
+      <div class="filters">
+        <div class="fgroup">
+          <span class="flab" data-copy="bucket">Bucket</span>
+          <div class="chips" data-filter="bucket">
+            <button class="chip" aria-pressed="true" data-val="all" data-copy-bucket="all">All</button>
+            <button class="chip" aria-pressed="false" data-val="low" data-copy-bucket="low">Low</button>
+            <button class="chip" aria-pressed="false" data-val="mid" data-copy-bucket="mid">Mid</button>
+            <button class="chip" aria-pressed="false" data-val="high" data-copy-bucket="high">High</button>
+          </div>
+        </div>
+        <div class="fgroup search">
+          <span class="flab" data-copy="search">Search</span>
+          <input type="text" id="search" placeholder="item id…" autocomplete="off" />
+        </div>
+      </div>
+      <p class="count-note" id="countNote"></p>
+      <div class="twrap"><table id="perTbl"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+
+  <!-- ===== SAMPLES (media viewer; hidden if imgdata empty) ===== -->
+  <div id="pane-samples" class="pane" role="tabpanel" hidden>
+    <section>
+      <h2 data-copy-section="samples">Sample viewer</h2>
+      <div class="card">
+        <div class="chart-s" style="margin-bottom:10px" data-copy="viewerHelp">Curated subset. Same display window per row → panels are directly comparable.</div>
+        <div class="controls"><button class="navbtn" id="prevS" data-copy="prev">◀ Prev</button><select id="sampleSel"></select><button class="navbtn" id="nextS" data-copy="next">Next ▶</button></div>
+        <div class="panels" id="panels"></div>
+        <div class="sample-meta" id="sampleMeta"></div>
+        <div class="note" id="viewerNote"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== PLAN (experiment backlog; rows live in <script id="plandata">, rendered by planView) =====
+       A row's `links` point at the day it was worked on: clicking one switches to that pane and filters
+       its calendar to that date. Auto-hidden when plandata is empty. -->
+  <div id="pane-plan" class="pane" role="tabpanel" hidden>
+    <section>
+      <h2 data-copy-section="plan">Plan</h2>
+      <div class="chart-s" style="margin-bottom:12px" data-copy="planHelp">What still has to run, why, and where the evidence
+        landed. Click a date to jump to that day's note.</div>
+      <div class="card"><div class="twrap"><table class="summary plan" id="planTbl"><thead></thead><tbody></tbody></table></div>
+        <div class="foot">Cost is the estimate used to prioritise; a done row keeps its completion date.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== NOTES (required dated-narrative component: decision-grade experiment records) =====
+       Keep this shell intact: noteView validates the calendar, sticky rail, status/date filters, and data.
+       Entries live in <script id="notesdata">; each is {date,time?,status,title,key,sections}.
+       Experiment status and the seven exact fixed headings come from NOTE_CONTRACTS below.
+       Multiple records may share a date. The issue pane ships immediately below; do not duplicate either
+       dated pane. The closing gate enforces exactly Plan / Notes / Issues. Empty data hides its tab. -->
+  <div id="pane-notes" class="pane" role="tabpanel" data-component="dated-narrative" hidden>
+    <section>
+      <h2 data-copy-section="notes">Notes</h2>
+      <div class="notes-layout" data-dated-narrative-layout>
+        <div class="notes-main">
+          <div class="chart-s" style="margin-bottom:7px" data-copy="notesHelp">Dated entries, newest first. Days with an entry are highlighted in the calendar — click one to filter.</div>
+          <div id="notesFilter" class="notes-filter" hidden></div>
+          <div id="notes"></div>
+        </div>
+        <aside class="notes-side" data-dated-narrative-calendar><div id="cal" class="notecal"></div></aside>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== ISSUES (the only second dated-narrative pane: one defect per record) ===== -->
+  <div id="pane-issues" class="pane" role="tabpanel" data-component="dated-narrative" hidden>
+    <section>
+      <h2 data-copy-section="issues">Issues</h2>
+      <div class="notes-layout" data-dated-narrative-layout>
+        <div class="notes-main">
+          <div class="chart-s" style="margin-bottom:7px" data-copy="issuesHelp">One defect per record. Lifecycle badges and fixed sections show investigation through closure.</div>
+          <div id="issuesFilter" class="notes-filter" hidden></div>
+          <div id="issues"></div>
+        </div>
+        <aside class="notes-side" data-dated-narrative-calendar><div id="issuesCal" class="notecal"></div></aside>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== COMPONENTS (design kit — reference only; delete this tab before publishing) ===== -->
+  <div id="pane-kit" class="pane" role="tabpanel" hidden>
+    <div class="verdict warn" style="margin-top:22px"><div class="vdot"></div><div>
+      <h3>Design kit — reference, not content</h3>
+      <p>대시보드를 만들 때 복사해 쓰는 컴포넌트 모음(스타일 가이드)입니다. 실제 결과가 아니므로 <b>발행 전 이 탭(버튼 + <code>#pane-kit</code>)은 삭제</b>하세요.</p></div></div>
+
+    <section>
+      <h2>Color tokens</h2>
+      <div class="swatches" id="kitSwatches"></div>
+      <p class="kit-note">series 색(--c-0/1/2)은 dataviz validator로 colorblind-safe 확인 후 사용.</p>
+    </section>
+
+    <section>
+      <h2>Typography</h2>
+      <div class="card">
+        <div class="eyebrow">EYEBROW · LABEL</div>
+        <h1 style="margin:6px 0">H1 — page title</h1>
+        <h2 style="border:0;padding:0;margin:8px 0 4px">H2 — section label</h2>
+        <p class="lede">Lede — one-sentence framing, muted, ~74ch.</p>
+        <p style="font-size:15px;color:var(--muted);margin:8px 0 0">Prose — body copy with <b style="color:var(--ink)">emphasis</b>. Figures use <span class="num">1,234.56</span> (tabular mono).</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Tiles — KPI at a glance</h2>
+      <div class="tiles">
+        <div class="tile"><div class="tnum">31</div><div class="lab">plain metric</div></div>
+        <div class="tile good"><div class="tnum">12</div><div class="lab">good / positive</div></div>
+        <div class="tile alert"><div class="tnum">2</div><div class="lab">alert / needs attention</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Callouts & verdict</h2>
+      <div class="callouts">
+        <div class="callout"><h3>Callout (default)</h3><p>Left-accent finding card.</p></div>
+        <div class="callout warn"><h3>Callout (warn)</h3><p>Caveat / risk variant.</p></div>
+      </div>
+      <div class="verdict" style="margin-top:12px"><div class="vdot"></div><div><h3>Verdict banner</h3><p>Top-of-page headline finding.</p></div></div>
+    </section>
+
+    <section>
+      <h2>Controls — buttons & chips</h2>
+      <div class="kit-row">
+        <button class="toggle">◐ Theme</button>
+        <button class="navbtn">◀ Prev</button>
+        <button class="navbtn">Next ▶</button>
+      </div>
+      <div class="kit-row" style="margin-top:10px">
+        <button class="chip" aria-pressed="true">chip · active</button>
+        <button class="chip" aria-pressed="false">chip · idle</button>
+        <button class="chip" aria-pressed="false">chip · idle</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Pills & badges</h2>
+      <div class="kit-row">
+        <span class="pill role substrate">substrate</span>
+        <span class="pill role reward">reward-GT</span>
+        <span class="pill role eval">eval</span>
+        <span class="pill role source">clean source</span>
+        <span class="pill role probe">probe</span>
+      </div>
+      <div class="kit-row" style="margin-top:12px">
+        <span class="gt"><span class="gtb p">✓</span><span class="gtb h">~</span><span class="gtb a">✗</span></span>
+        <span class="kit-note" style="margin:0">presence — present / partial / absent</span>
+      </div>
+      <div class="kit-row" style="margin-top:12px">
+        <span class="vb ok">verified</span>
+        <span class="vb warn">search-only</span>
+        <span class="vb unv">unverified</span>
+        <span class="kit-note" style="margin:0">provenance / verification</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Metrics & indicators</h2>
+      <div class="kit-row" style="gap:18px">
+        <span class="delta up">+2.34</span>
+        <span class="delta down">-1.08</span>
+        <span class="delta flat">0.00</span>
+        <span class="kit-note" style="margin:0">delta vs baseline (▲ better / ▼ worse)</span>
+      </div>
+      <div style="max-width:360px;margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <div class="meter"><span style="min-width:74px">coverage</span><span class="track"><span class="fill" style="width:74%"></span></span><span class="val">74%</span></div>
+        <div class="meter"><span style="min-width:74px">agreement</span><span class="track"><span class="fill" style="width:92%;background:var(--ok)"></span></span><span class="val">0.92</span></div>
+      </div>
+      <div class="kit-row" style="margin-top:14px">
+        <span class="pill ok">pass</span><span class="pill mid">partial</span><span class="pill no">fail</span>
+        <span class="kit-note" style="margin:0">status pills (semantic)</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>Unit card — semantic detail</h2>
+      <div class="unit-grid">
+        <article class="unit-card" data-state="partial">
+          <div class="unit-head"><div><div class="unit-title">temporal_change</div><div class="unit-sub">primary research unit · live evidence incomplete</div></div><span class="pill mid">partial</span></div>
+          <div class="unit-summary">Use this card form for capabilities/workstreams where distributions and delta plots would be meaningless.</div>
+          <div><div class="unit-label">Evidence</div><ul><li>Implementation exists.</li><li>Real-data gate still needs served-model evidence.</li></ul></div>
+          <div class="meter"><span style="min-width:74px">completion</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3/5</span></div>
+          <div class="unit-gate"><div class="unit-label">Next gate</div>Run the configured model/data path and link the resulting artifact.</div>
+          <div class="unit-tech"><code>evaluate_temporal_change</code><code>ms_cxr_t_primary</code></div>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Legend, notes & inline code</h2>
+      <div class="legend" style="margin:0 0 12px">
+        <span><span class="swatch" style="background:var(--c-0)"></span>Variant 0</span>
+        <span><span class="swatch" style="background:var(--c-1)"></span>Variant 1</span>
+        <span><span class="swatch" style="background:var(--c-2)"></span>Variant 2</span>
+      </div>
+      <div class="note">Note — muted callout for a caveat under a chart (<span class="inline-code">.note</span>).</div>
+      <p style="font-size:15px;color:var(--muted);margin:12px 0 0">Reference a config key like <span class="inline-code">num_generations</span> or a path <span class="inline-code">runs/exp/dashboard.html</span> inline.</p>
+    </section>
+
+    <section>
+      <h2>Table row + collapsible</h2>
+      <div class="twrap" style="max-height:none"><table>
+        <thead><tr><th>Item</th><th>Role</th><th>Verify</th><th class="num">Metric</th></tr></thead>
+        <tbody>
+          <tr class="grouprow"><td colspan="4">Group header — cluster rows by model / dataset / split</td></tr>
+          <tr><td>Example A</td><td><span class="pill role reward">reward-GT</span></td><td><span class="vb ok">verified</span></td><td class="num">38.87</td></tr>
+          <tr><td>Example B</td><td><span class="pill role eval">eval</span></td><td><span class="vb warn">search-only</span></td><td class="num">0.9625</td></tr>
+        </tbody>
+      </table></div>
+      <details class="sources"><summary>Collapsible sources / notes</summary>
+        <div class="src-list"><div><b>Source:</b> where the numbers came from</div><div><b>Method:</b> how metrics were computed</div></div>
+      </details>
+    </section>
+  </div>
+
+  <footer id="footer">Compiled YYYY-MM-DD · numbers re-checked against the source report · treat any unverified figure as provisional.</footer>
+  <button id="toTop" title="Back to top" aria-label="Back to top">↑</button>
+</div>
+<div class="tip" id="tip"></div>
+<div id="record-fatal" role="alert" aria-live="assertive" hidden></div>
+
+<!-- scope framing cards: 3–6 objects, each {title,text}. Explain the whole research/project context:
+     unmet need, goal, prior baseline/work, gap, contribution, and any not-yet-claimed boundary. -->
+<script id="framingdata" type="application/json">
+[
+  {"title":"Goal","text":"The question this work answers, in one sentence — the question, not the method."},
+  {"title":"Prior work","text":"What already exists and how it approached this — name the closest two or three lines of work."},
+  {"title":"Gap","text":"What prior work leaves unanswered — the specific hole this run targets."},
+  {"title":"Contribution","text":"What this adds, scoped to what the numbers or unit cards on this page actually support — and what is explicitly not claimed yet."}
+]
+</script>
+
+<!-- semantic research units/workstreams/capabilities, or [] for numeric-only dashboards.
+     Schema is fixed: id,title,subtitle,status,summary,completion,evidence,next_gate,blockers,technical_ids.
+     completion is shown as text and, when numeric 0..5, as a 1–5 progress meter. -->
+<script id="unitdata" type="application/json">
+[]
+</script>
+
+<!-- curated media map, or {} if no viewer: {id:{img:{panel:dataURI}, m:{...}}} -->
+<script id="imgdata" type="application/json">{}</script>
+<!-- Dated records use {date,time?,status,title,key,sections}. NOTE_CONTRACTS defines each pane's exact
+     lifecycle vocabulary and fixed ordered headings. A fixed section may use items/table/images and
+     migrated source detail in blocks:[{h,items?,table?,images?,collapsed?}]. Image src values are data: URIs.
+     Replace these blocks' contents. Empty arrays hide their tabs. -->
+<!-- experiment backlog rows: {task, goal, status, date?, cost?, priority?, links?[{pane,date,label}], note?} -->
+<script id="plandata" type="application/json">[]</script>
+<script id="issuesdata" type="application/json">
+[{"date":"2026-01-15","status":"조사 중","title":"Example issue under investigation",
+  "key":"The symptom is confirmed; root cause remains unverified.","sections":[
+   {"h":"Impact","items":["Example impact and urgency."]},
+   {"h":"Observed Symptom","items":["Expected progress; observed stall."]},
+   {"h":"Evidence","items":["Example log and reproduction evidence."]},
+   {"h":"Hypotheses","items":["Next discriminating check is recorded."]},
+   {"h":"Root Cause","items":["미확정 — evidence is not yet sufficient."]},
+   {"h":"Resolution","items":["해당 없음 — no fix has been applied."]},
+   {"h":"Verification","items":["미확정 — verification follows a fix."]},
+   {"h":"Closure","items":["미해결 — investigation remains open."]}]}]
+</script>
+<script id="notesdata" type="application/json">
+[{"date":"2026-01-15","time":"16:40","status":"완료","title":"Variant 1 wins on the hard bucket",
+  "key":"Variant 1 is the pick: +0.4 dB on the hard bucket and no regression elsewhere.","sections":[
+   {"h":"Decision Question","items":["Promote variant 1 if it improves the hard bucket without regression."]},
+   {"h":"Hypothesis","items":["Variant 1 beats the reproduced baseline; falsified by a non-positive delta."]},
+   {"h":"Run Identity","items":["run: `demo-v1`; seed: 42; command and artifact paths recorded."]},
+   {"h":"Live Snapshot","items":["Completed 2026-01-15 16:40 with exit 0; artifacts verified."]},
+   {"h":"Results","table":{"head":["arm","hard-bucket metric"],"rows":[["baseline","31.2"],["variant 1","31.6"]]},
+    "blocks":[{"h":"Original commands","collapsed":true,"items":["python eval.py --variant v1 --split test"]}]},
+   {"h":"Interpretation","items":["Confirmed on this sample; cross-dataset generalisation is not shown."]},
+   {"h":"Decision","items":["채택 — next experiment: repeat on the external split."]}]}]
+</script>
+
+<!-- per-item rows: [{id, bucket, base_A, v0_A, v1_A, ...}]. Replace this block's contents with the real
+     rows; every VARS x METRICS field must be a finite number on every row or the page throws on load. -->
+<script id="data" type="application/json">
+[{"id":"001","bucket":"low","base_A":31.2,"v0_A":38.1,"v1_A":38.2,"v2_A":37.9,"base_B":0.90,"v0_B":0.96,"v1_B":0.96,"v2_B":0.95},
+ {"id":"002","bucket":"low","base_A":29.8,"v0_A":36.4,"v1_A":36.1,"v2_A":36.6,"base_B":0.88,"v0_B":0.95,"v1_B":0.94,"v2_B":0.95},
+ {"id":"003","bucket":"mid","base_A":33.1,"v0_A":40.0,"v1_A":40.3,"v2_A":39.7,"base_B":0.93,"v0_B":0.97,"v1_B":0.97,"v2_B":0.96},
+ {"id":"004","bucket":"mid","base_A":30.5,"v0_A":37.2,"v1_A":37.0,"v2_A":37.4,"base_B":0.89,"v0_B":0.95,"v1_B":0.95,"v2_B":0.94},
+ {"id":"005","bucket":"mid","base_A":32.0,"v0_A":38.9,"v1_A":39.1,"v2_A":38.5,"base_B":0.91,"v0_B":0.96,"v1_B":0.96,"v2_B":0.95},
+ {"id":"006","bucket":"high","base_A":34.4,"v0_A":41.2,"v1_A":41.0,"v2_A":40.8,"base_B":0.94,"v0_B":0.98,"v1_B":0.97,"v2_B":0.97},
+ {"id":"007","bucket":"high","base_A":35.1,"v0_A":42.0,"v1_A":41.6,"v2_A":41.9,"base_B":0.95,"v0_B":0.98,"v1_B":0.98,"v2_B":0.97},
+ {"id":"008","bucket":"low","base_A":28.9,"v0_A":35.1,"v1_A":35.4,"v2_A":34.8,"base_B":0.86,"v0_B":0.94,"v1_B":0.94,"v2_B":0.93},
+ {"id":"009","bucket":"mid","base_A":31.8,"v0_A":38.4,"v1_A":38.0,"v2_A":38.6,"base_B":0.90,"v0_B":0.96,"v1_B":0.95,"v2_B":0.96},
+ {"id":"010","bucket":"high","base_A":33.7,"v0_A":40.6,"v1_A":40.9,"v2_A":40.3,"base_B":0.93,"v0_B":0.97,"v1_B":0.97,"v2_B":0.96},
+ {"id":"011","bucket":"low","base_A":30.1,"v0_A":36.8,"v1_A":36.5,"v2_A":37.0,"base_B":0.87,"v0_B":0.95,"v1_B":0.94,"v2_B":0.95},
+ {"id":"012","bucket":"high","base_A":34.9,"v0_A":41.7,"v1_A":41.9,"v2_A":41.4,"base_B":0.94,"v0_B":0.98,"v1_B":0.97,"v2_B":0.97}]
+</script>
+<script>
+/* ===== CONFIG — edit these ===== */
+const VARS=[{k:'v0',label:'Variant 0',c:'--c-0'},{k:'v1',label:'Variant 1',c:'--c-1'},{k:'v2',label:'Variant 2',c:'--c-2'}];
+const METRICS=[{k:'A',label:'Metric A',dec:2,unit:'dB'},{k:'B',label:'Metric B',dec:4,unit:''}];
+const BASELINE={k:'base',label:'Baseline'};
+const COPY={
+  locale:'en-US',
+  groups:{results:'Results',record:'Record',build:'Build'},
+  tabs:{overview:'Overview',detail:'Per-item',samples:'Samples',plan:'Plan',notes:'Notes',issues:'Issues',components:'Components'},
+  sections:{overview:'Overview',glance:'At a glance',summary:'Summary',findings:'Findings',units:'Units',distributions:'Distributions',delta:'Per-item delta vs baseline',itemTable:'Per-item table',samples:'Sample viewer',plan:'Plan',notes:'Notes',issues:'Issues'},
+  controls:{theme:'◐ Theme',metricLabel:'Metric',bucket:'Bucket',search:'Search',prev:'◀ Prev',next:'Next ▶'},
+  buckets:{all:'All',low:'Low',mid:'Mid',high:'High'},
+  record:{
+    status:'Status',all:'All',entries:'entries',entry:'entry',showAllDates:'show all dates',
+    noEntries:'No entries for the selected date and status.',prevMonth:'Previous month',nextMonth:'Next month',
+    weekdays:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+    fatal:'Record data could not be rendered',
+    sectionLabels:{
+      'Decision Question':'Decision Question','Hypothesis':'Hypothesis','Run Identity':'Run Identity','Live Snapshot':'Live Snapshot','Results':'Results','Interpretation':'Interpretation','Decision':'Decision',
+      'Impact':'Impact','Observed Symptom':'Observed Symptom','Evidence':'Evidence','Hypotheses':'Hypotheses','Root Cause':'Root Cause','Resolution':'Resolution','Verification':'Verification','Closure':'Closure'
+    },
+    statusLabels:{'예정':'planned','진행 중':'running','완료':'complete','중단':'stopped','보류':'deferred','신규':'new','조사 중':'investigating','완화':'mitigated','모니터링':'monitoring','해결':'resolved','차단':'blocked'},
+    dateFilter:(date,n)=>`${date} — ${n} ${n===1?'entry':'entries'} · `
+  },
+  plan:{headers:['Task','Goal','Status','Cost','Priority','Evidence'],status:{done:['ok','done'],running:['mid','running'],todo:['','todo'],blocked:['no','blocked']}},
+  units:{statusClass:{complete:'ok',done:'ok',verified:'ok',partial:'mid',running:'mid',blocked:'no',failed:'no'},labels:{evidence:'Evidence',blockers:'Blockers',nextGate:'Next gate',technicalIds:'Technical IDs',completion:'completion'},emptyBlockers:'No named blockers.'},
+  empty:{numeric:'No numeric DATA rows supplied; semantic unit cards are shown instead.',units:'No semantic units supplied.'},
+  viewer:{help:'Curated subset. Same display window per row → panels are directly comparable.',note:'Curated subset for direct comparison — not the full set.',missingSrc:'missing src'},
+  unitHelp:'Role, current judgment, evidence stage, blockers, and the next completion gate for each unit.',
+  deltaHelp:'Each mark = one item, sorted. Above 0 = better than baseline.',
+  viewerHelp:'Curated subset. Same display window per row → panels are directly comparable.',
+  planHelp:"What still has to run, why, and where the evidence landed. Click a date to jump to that day's note.",
+  notesHelp:'Dated entries, newest first. Days with an entry are highlighted in the calendar — click one to filter.',
+  issuesHelp:'One defect per record. Lifecycle badges and fixed sections show investigation through closure.',
+  countNote:(shown,total)=>`showing ${shown} of ${total}`,
+};
+/* tiles: computed from AGG/DATA. return {v:number|string, lab, cls?:'good'|'alert'} */
+const TILES=[
+  ()=>({v:DATA.length,lab:'items evaluated'}),
+  ()=>{const b=bestVar(METRICS[0].k);return{v:b.label,lab:`best on ${METRICS[0].label}`,cls:'good'}},
+  ()=>{const b=bestVar(METRICS[0].k);return{v:AGG[b.k][METRICS[0].k].toFixed(METRICS[0].dec)+' '+METRICS[0].unit,lab:`${b.label} · ${METRICS[0].label}`}},
+  ()=>{const b=bestVar(METRICS[0].k),reg=DATA.filter(d=>BASE[METRICS[0].k]!=null&&d[fld(b.k,METRICS[0].k)]<d[fld(BASELINE.k,METRICS[0].k)]).length;return{v:reg,lab:`items where best < baseline`,cls:reg?'alert':'good'}},
+];
+/* ================================ */
+const DATA=JSON.parse(document.getElementById('data').textContent);
+const FRAMING=JSON.parse(document.getElementById('framingdata').textContent);
+const UNITS=JSON.parse(document.getElementById('unitdata').textContent);
+const IMGS=JSON.parse(document.getElementById('imgdata').textContent);
+const cssvar=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const mean=a=>a.reduce((s,x)=>s+x,0)/a.length;
+const fld=(v,m)=>v+'_'+m;
+/* Two passes, ONE pair for the whole file — they live up here with the other helpers because half the
+   renderers run at parse time and half run inside draw(); a definition further down is a TDZ crash for
+   the early ones. escN = anything from a data block or bound for an attribute/URL. mdN = prose. */
+const escN=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Prose is written by hand, so authors type **bold**, `code`, *italic*. Render that inline — escaping
+   first means the markers survive but any real tag the author typed stays inert text. */
+const mdN=s=>escN(s)
+  .replace(/`([^`]+)`/g,'<span class="inline-code">$1</span>')
+  .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')
+  .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+function applyCopy(){
+  document.querySelectorAll('[data-copy-group]').forEach(el=>{const v=COPY.groups&&COPY.groups[el.dataset.copyGroup];if(v)el.dataset.glabel=v;});
+  document.querySelectorAll('[data-copy-tab]').forEach(el=>{const v=COPY.tabs&&COPY.tabs[el.dataset.copyTab];if(v)el.textContent=v;});
+  document.querySelectorAll('[data-copy-section]').forEach(el=>{const v=COPY.sections&&COPY.sections[el.dataset.copySection];if(v)el.textContent=v;});
+  document.querySelectorAll('[data-copy]').forEach(el=>{const v=(COPY.controls&&COPY.controls[el.dataset.copy])||COPY[el.dataset.copy]||(COPY.viewer&&COPY.viewer[el.dataset.copy]);if(v)el.textContent=v;});
+  document.querySelectorAll('[data-copy-bucket]').forEach(el=>{const v=COPY.buckets&&COPY.buckets[el.dataset.copyBucket];if(v)el.textContent=v;});
+  const search=document.getElementById('search');if(search&&COPY.controls&&COPY.controls.searchPlaceholder)search.placeholder=COPY.controls.searchPlaceholder;
+  const toTop=document.getElementById('toTop');if(toTop&&COPY.controls&&COPY.controls.backToTop){toTop.title=COPY.controls.backToTop;toTop.setAttribute('aria-label',COPY.controls.backToTop);}
+}
+const tip=document.getElementById('tip');
+function showTip(html,e){tip.innerHTML=html;tip.style.opacity=1;const p=12;let x=e.clientX+p,y=e.clientY+p;
+  const r=tip.getBoundingClientRect();if(x+r.width>innerWidth)x=e.clientX-r.width-p;if(y+r.height>innerHeight)y=e.clientY-r.height-p;
+  tip.style.left=x+'px';tip.style.top=y+'px';}
+const hideTip=()=>tip.style.opacity=0;
+
+applyCopy();
+
+/* Fail loud on unusable data — checked BEFORE anything is drawn. An empty array rendered a full page of
+   `NaN` tiles and charts full of NaN coordinates, and a single missing metric field emptied the per-item
+   table with no message at all: a dashboard that looks built and is not. A baseline column is optional,
+   but present-on-some-rows-only is the same silent NaN, so it is all-or-nothing per metric. */
+if(!Array.isArray(DATA)) throw new Error('dashboard data must be an array.');
+if(!Array.isArray(UNITS)) throw new Error('unitdata must be an array.');
+if(!Array.isArray(FRAMING)||FRAMING.length<3||FRAMING.length>6) throw new Error('framingdata must contain 3–6 cards.');
+FRAMING.forEach((c,i)=>{if(!c||typeof c!=='object'||!String(c.title||'').trim()||!String(c.text||'').trim())throw new Error(`framing card ${i+1} requires title and text.`);});
+if(!DATA.length&&!UNITS.length) throw new Error('dashboard requires at least one numeric DATA row or one semantic UNITS row.');
+const HAS_NUMERIC=DATA.length>0;
+const HAS_UNITS=UNITS.length>0;
+function framingView(){document.getElementById('framingCards').innerHTML=FRAMING.map(c=>`<div class="callout"><h3>${mdN(c.title)}</h3><p>${mdN(c.text)}</p></div>`).join('');}
+function unitView(){
+  const pane=document.getElementById('unitSection'),grid=document.getElementById('unitGrid');
+  if(!HAS_UNITS){pane.hidden=true;return;}
+  const required=['id','title','subtitle','status','summary','completion','evidence','next_gate','blockers','technical_ids'];
+  UNITS.forEach((u,i)=>{if(!u||typeof u!=='object')throw new Error(`unit ${i+1} must be an object.`);
+    required.forEach(k=>{if(!(k in u))throw new Error(`unit ${i+1} missing required field ${k}.`);});
+    if(!String(u.id).trim()||!String(u.title).trim()||!String(u.status).trim()||!String(u.summary).trim()||!String(u.next_gate).trim())throw new Error(`unit ${i+1} requires non-empty id/title/status/summary/next_gate.`);
+    if(!Array.isArray(u.evidence)||!Array.isArray(u.blockers)||!Array.isArray(u.technical_ids))throw new Error(`unit ${u.id||i+1} evidence/blockers/technical_ids must be arrays.`);
+  });
+  const labels=(COPY.units&&COPY.units.labels)||{};
+  const statusClass=s=>((COPY.units&&COPY.units.statusClass&&COPY.units.statusClass[String(s).toLowerCase()])||(/완료|검증|pass|done|complete/i.test(String(s))?'ok':/차단|실패|fail|block/i.test(String(s))?'no':'mid'));
+  const completion=u=>{const c=u.completion;
+    if(c&&typeof c==='object'&&!Array.isArray(c)){
+      const done=Number(c.done), total=Number(c.total);
+      if(!Number.isFinite(done)||!Number.isFinite(total)||total<=0||done<0||done>total)throw new Error(`unit ${u.id} completion object requires finite 0 <= done <= total and total > 0.`);
+      return `<div class="meter"><span style="min-width:86px">${mdN(c.label||labels.completion||'completion')}</span><span class="track"><span class="fill" style="width:${done/total*100}%"></span></span><span class="val">${done}/${total}</span></div>`;
+    }
+    const n=typeof c==='number'?c:(/^\d+(?:\.\d+)?$/.test(String(c))?Number(c):null);
+    if(n!=null&&Number.isFinite(n)){const v=Math.max(0,Math.min(5,n));return `<div class="meter"><span style="min-width:86px">${mdN(labels.completion||'completion')}</span><span class="track"><span class="fill" style="width:${v/5*100}%"></span></span><span class="val">${v}/5</span></div>`;}
+    return `<div class="unit-label">${mdN(labels.completion||'completion')}</div><div class="unit-summary">${mdN(c)}</div>`;};
+  const list=xs=>xs.length?`<ul>${xs.map(x=>`<li>${mdN(x)}</li>`).join('')}</ul>`:`<div class="unit-summary">${mdN(COPY.units&&COPY.units.emptyBlockers||'—')}</div>`;
+  pane.hidden=false;
+  grid.innerHTML=UNITS.map(u=>`<article class="unit-card" data-state="${escN(u.status)}">
+    <div class="unit-head"><div><div class="unit-title">${mdN(u.title)}</div><div class="unit-sub">${mdN(u.subtitle)}</div></div><span class="pill ${statusClass(u.status)}">${mdN(u.status)}</span></div>
+    <div class="unit-summary">${mdN(u.summary)}</div>
+    ${completion(u)}
+    <div><div class="unit-label">${mdN(labels.evidence||'Evidence')}</div>${list(u.evidence)}</div>
+    ${u.blockers.length?`<div><div class="unit-label">${mdN(labels.blockers||'Blockers')}</div>${list(u.blockers)}</div>`:''}
+    <div class="unit-gate"><div class="unit-label">${mdN(labels.nextGate||'Next gate')}</div>${mdN(u.next_gate)}</div>
+    ${u.technical_ids.length?`<div><div class="unit-label">${mdN(labels.technicalIds||'Technical IDs')}</div><div class="unit-tech">${u.technical_ids.map(x=>`<code>${escN(x)}</code>`).join('')}</div></div>`:''}
+  </article>`).join('');
+}
+framingView();unitView();
+document.querySelectorAll('[data-numeric-detail]').forEach(el=>{el.hidden=!HAS_NUMERIC;});
+if(!HAS_NUMERIC){document.getElementById('tilesSection').hidden=true;document.getElementById('summarySection').hidden=true;document.getElementById('countNote').textContent=COPY.empty.numeric;}
+const hasBase={};METRICS.forEach(m=>hasBase[m.k]=DATA.some(d=>fld(BASELINE.k,m.k)in d));
+DATA.forEach((d,i)=>METRICS.forEach(m=>VARS.concat(hasBase[m.k]?[BASELINE]:[]).forEach(v=>{const k=fld(v.k,m.k),x=d[k];
+  if(typeof x!=='number'||!isFinite(x)) throw new Error(`row ${i} (id ${d.id}) has no usable ${k}: ${x}`);})));
+const AGG={};VARS.forEach(v=>{AGG[v.k]={};METRICS.forEach(m=>AGG[v.k][m.k]=mean(DATA.map(d=>d[fld(v.k,m.k)])))});
+const BASE={};METRICS.forEach(m=>BASE[m.k]=hasBase[m.k]?mean(DATA.map(d=>d[fld(BASELINE.k,m.k)])):null);
+function bestVar(mk){let bk=VARS[0].k;VARS.forEach(v=>{if(AGG[v.k][mk]>AGG[bk][mk])bk=v.k});return VARS.find(v=>v.k===bk);}
+
+// tiles
+if(HAS_NUMERIC)document.getElementById('tiles').innerHTML=TILES.map(f=>{const t=f();return `<div class="tile ${t.cls||''}"><div class="tnum">${mdN(t.v)}</div><div class="lab">${mdN(t.lab)}</div></div>`;}).join('');
+// component-kit color swatches (Components tab)
+document.getElementById('kitSwatches').innerHTML=['--accent','--ink','--muted','--surface','--surface-2','--border','--ok','--warn','--bad','--c-0','--c-1','--c-2'].map(t=>`<div class="sw"><i style="background:var(${t})"></i><span>${t}</span></div>`).join('');
+
+// summary table
+(function(){if(!HAS_NUMERIC)return;const t=document.getElementById('summaryTbl');
+  t.querySelector('thead').innerHTML='<tr><th>Entity</th>'+METRICS.map(m=>`<th class="num">${escN(m.label)}</th>`).join('')+'</tr>';
+  const best={};METRICS.forEach(m=>best[m.k]=bestVar(m.k).k);
+  let rows=VARS.map(v=>`<tr><td><span class="swatch" style="background:var(${v.c});margin-right:8px"></span>${mdN(v.label)}</td>`+
+    METRICS.map(m=>`<td class="num ${best[m.k]===v.k?'best':''}">${AGG[v.k][m.k].toFixed(m.dec)}</td>`).join('')+'</tr>').join('');
+  if(BASE[METRICS[0].k]!=null)rows+=`<tr class="baseline"><td>${mdN(BASELINE.label)}</td>`+METRICS.map(m=>`<td class="num">${BASE[m.k]!=null?BASE[m.k].toFixed(m.dec):'—'}</td>`).join('')+'</tr>';
+  t.querySelector('tbody').innerHTML=rows;})();
+if(HAS_NUMERIC){
+  document.getElementById('legend').innerHTML=VARS.map(v=>`<span><span class="swatch" style="background:var(${v.c})"></span>${mdN(v.label)}</span>`).join('');
+  document.getElementById('deltaMetric').innerHTML=METRICS.map(m=>`<option value="${escN(m.k)}">${escN(m.label)}</option>`).join('');
+}
+
+function bar(id,mk){const m=METRICS.find(x=>x.k===mk);const svg=document.getElementById(id);const W=420,H=210,ml=46,mr=14,mt=14,mb=34;
+  const vals=VARS.map(v=>AGG[v.k][mk]);const raw=[...vals];if(BASE[mk]!=null)raw.push(BASE[mk]);
+  let lo=Math.min(...raw),hi=Math.max(...raw);const pad=(hi-lo||1)*.35;lo-=pad;hi+=pad*.4;
+  const x=i=>ml+(i+.5)*((W-ml-mr)/VARS.length),y=v=>mt+(H-mt-mb)*(1-(v-lo)/(hi-lo)),bw=(W-ml-mr)/VARS.length*.5;let s='';
+  for(let t=0;t<=4;t++){const val=lo+(hi-lo)*t/4,yy=y(val);s+=`<line class="gridline" x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}"/><text class="axis" x="${ml-7}" y="${yy+3}" text-anchor="end">${val.toFixed(m.dec)}</text>`;}
+  /* escN inside SVG: a `<` or `&` in a label breaks the whole <text> node, and the chart silently loses
+     its baseline rule rather than showing a mangled string. */
+  if(BASE[mk]!=null){const yy=y(BASE[mk]);s+=`<line class="baserule" x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}"/><text class="axis" x="${W-mr}" y="${yy-4}" text-anchor="end">${escN(BASELINE.label)} ${BASE[mk].toFixed(m.dec)}</text>`;}
+  VARS.forEach((v,i)=>{const val=AGG[v.k][mk],yy=y(val),col=cssvar(v.c);s+=`<rect x="${x(i)-bw/2}" y="${yy}" width="${bw}" height="${H-mb-yy}" rx="4" fill="${col}" data-i="${i}" class="bar"/>`+
+    `<text class="axis" x="${x(i)}" y="${yy-6}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${val.toFixed(m.dec)}</text>`+
+    `<text class="axis" x="${x(i)}" y="${H-mb+15}" text-anchor="middle" style="fill:var(--muted)">${v.k}</text>`;});
+  svg.innerHTML=s;svg.querySelectorAll('.bar').forEach(b=>{const v=VARS[+b.dataset.i];b.style.cursor='pointer';
+    b.onmousemove=e=>showTip(`<b>${v.label}</b><br><span class="k">${m.label}</span> <b>${AGG[v.k][mk].toFixed(m.dec)}</b>`,e);b.onmouseleave=hideTip;});}
+
+function dist(id,mk){const m=METRICS.find(x=>x.k===mk);const svg=document.getElementById(id);const W=420,H=220,ml=40,mr=12,mt=12,mb=30;
+  /* `||.5` because every item sharing one value gives hi===lo, and a zero-width range makes the bin
+     index NaN — the histogram then draws nothing at all instead of one spike. (bar() already guards.) */
+  const all=[];VARS.forEach(v=>DATA.forEach(d=>all.push(d[fld(v.k,mk)])));let lo=Math.min(...all),hi=Math.max(...all);const pd=(hi-lo)*.04||.5;lo-=pd;hi+=pd;
+  const bins=24,bw=(hi-lo)/bins;const ser=VARS.map(v=>{const h=new Array(bins).fill(0);DATA.forEach(d=>{let b=Math.floor((d[fld(v.k,mk)]-lo)/bw);b=Math.max(0,Math.min(bins-1,b));h[b]++;});return{v,h};});
+  const mc=Math.max(...ser.flatMap(s=>s.h));const x=b=>ml+(b/bins)*(W-ml-mr),y=c=>mt+(H-mt-mb)*(1-c/mc);let s='';
+  for(let t=0;t<=3;t++){const val=lo+(hi-lo)*t/3;s+=`<text class="axis" x="${x((val-lo)/bw)}" y="${H-mb+14}" text-anchor="middle">${val.toFixed(m.dec>2?2:m.dec)}</text>`;}
+  const line=h=>{let p='';for(let b=0;b<bins;b++)p+=(b?'L':'M')+x(b+.5)+' '+y(h[b])+' ';return p;};
+  ser.forEach(({v,h})=>{const col=cssvar(v.c),p=line(h);s+=`<path d="${p} L ${x(bins-.5)} ${H-mb} L ${x(.5)} ${H-mb} Z" fill="${col}" opacity="0.13"/><path d="${p}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/>`;});
+  svg.innerHTML=s;}
+
+function delta(){const mk=document.getElementById('deltaMetric').value;const svg=document.getElementById('deltaChart');const W=1040,H=260,ml=48,mr=16,mt=14,mb=28;
+  const rows=DATA.map(d=>{const o={};VARS.forEach(v=>o[v.k]=d[fld(v.k,mk)]-(BASE[mk]!=null?d[fld(BASELINE.k,mk)]:0));return o;});
+  rows.sort((a,b)=>a[VARS[0].k]-b[VARS[0].k]);const ad=rows.flatMap(r=>VARS.map(v=>r[v.k]));const mm=Math.max(...ad.map(Math.abs))*1.08||1;const lo=-mm,hi=mm;
+  const x=i=>ml+(i/(rows.length-1||1))*(W-ml-mr),y=v=>mt+(H-mt-mb)*(1-(v-lo)/(hi-lo));let s='';
+  for(let t=0;t<=4;t++){const val=lo+(hi-lo)*t/4,yy=y(val);s+=`<line class="gridline" x1="${ml}" y1="${yy}" x2="${W-mr}" y2="${yy}"/><text class="axis" x="${ml-7}" y="${yy+3}" text-anchor="end">${val>0?'+':''}${val.toFixed(2)}</text>`;}
+  s+=`<line x1="${ml}" y1="${y(0)}" x2="${W-mr}" y2="${y(0)}" stroke="var(--muted)" stroke-width="1.2"/>`;
+  VARS.forEach(v=>{const col=cssvar(v.c);rows.forEach((r,i)=>{s+=`<circle cx="${x(i)}" cy="${y(r[v.k])}" r="1.9" fill="${col}" opacity="0.6"/>`;});
+    s+=`<line x1="${ml}" y1="${y(mean(rows.map(r=>r[v.k])))}" x2="${W-mr}" y2="${y(mean(rows.map(r=>r[v.k])))}" stroke="${col}" stroke-width="1.4" stroke-dasharray="5 3"/>`;});
+  svg.innerHTML=s;document.getElementById('deltaNote').innerHTML=VARS.map(v=>{const mv=mean(rows.map(r=>r[v.k]));const w=rows.filter(r=>r[v.k]>0).length;
+    return `${v.label}: mean Δ <span class="num" style="color:${mv>=0?'var(--good)':'var(--bad)'}">${mv>=0?'+':''}${mv.toFixed(3)}</span> (${w}/${rows.length} better)`;}).join(' · ');}
+document.getElementById('deltaMetric').onchange=delta;
+
+// per-item table (sortable + chip/search filter)
+let sortKey='id',sortDir=1,fltBucket='all',fltQ='';
+const hasBucket=DATA.some(d=>'bucket'in d);
+function table(){const cols=[['id','item',s=>s]]
+    .concat(hasBucket?[['bucket','bucket',s=>s]]:[])
+    .concat(VARS.flatMap(v=>METRICS.map(m=>[fld(v.k,m.k),v.k+' '+m.k,x=>x.toFixed(m.dec)])));
+  const isNum=k=>k!=='id'&&k!=='bucket';   // the header of a figure column gets .num so it sits over its own numbers
+  const th=document.querySelector('#perTbl thead');th.innerHTML='<tr>'+cols.map(c=>`<th${isNum(c[0])?' class="num"':''} data-k="${escN(c[0])}">${escN(c[1])}${sortKey===c[0]?(sortDir<0?' ▼':' ▲'):''}</th>`).join('')+'</tr>';
+  th.querySelectorAll('th').forEach(h=>h.onclick=()=>{const k=h.dataset.k;if(sortKey===k)sortDir*=-1;else{sortKey=k;sortDir=(k==='id'||k==='bucket')?1:-1;}table();});
+  let rows=[...DATA].filter(r=>(fltBucket==='all'||r.bucket===fltBucket)&&(!fltQ||String(r.id).toLowerCase().includes(fltQ)));
+  rows.sort((a,b)=>{const av=a[sortKey],bv=b[sortKey];return typeof av==='string'?sortDir*String(av).localeCompare(bv,undefined,{numeric:true}):sortDir*(av-bv);});
+  /* id/bucket come straight from the data block, so they get escN — an id containing `<` or `&` was
+     parsed as markup and swallowed the rest of the row. Data is never trusted as HTML. */
+  document.querySelector('#perTbl tbody').innerHTML=rows.map(r=>'<tr>'+cols.map(c=>{
+    if(c[0]==='bucket')return `<td><span class="pill" style="background:var(--role-x,var(--accent))">${escN(r.bucket)}</span></td>`;
+    if(c[0]==='id')return `<td>${escN(r.id)}</td>`;
+    return `<td class="num">${c[2](r[c[0]])}</td>`;}).join('')+'</tr>').join('');
+  document.getElementById('countNote').textContent=(COPY.countNote?COPY.countNote(rows.length,DATA.length):`showing ${rows.length} of ${DATA.length}`);}
+document.querySelector('.chips[data-filter="bucket"]').addEventListener('click',e=>{const b=e.target.closest('.chip');if(!b)return;
+  e.currentTarget.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===b?'true':'false'));fltBucket=b.dataset.val;table();});
+document.getElementById('search').addEventListener('input',e=>{fltQ=e.target.value.trim().toLowerCase();table();});
+
+// media viewer
+const IMG_IDS=Object.keys(IMGS);let curIdx=0;
+function viewer(){if(!IMG_IDS.length){document.getElementById('tabSamples').style.display='none';document.getElementById('pane-samples').hidden=true;return;}
+  const sel=document.getElementById('sampleSel');sel.innerHTML=IMG_IDS.map((id,i)=>`<option value="${i}">#${escN(id)}</option>`).join('');
+  sel.onchange=e=>{curIdx=+e.target.value;drawSample();};
+  document.getElementById('prevS').onclick=()=>{curIdx=(curIdx-1+IMG_IDS.length)%IMG_IDS.length;drawSample();};
+  document.getElementById('nextS').onclick=()=>{curIdx=(curIdx+1)%IMG_IDS.length;drawSample();};drawSample();
+  document.getElementById('viewerNote').textContent=(COPY.viewer&&COPY.viewer.note)||'Curated subset for direct comparison — not the full set.';}
+const fmtM=v=>v==null?'':(typeof v==='number'?(Number.isInteger(v)?String(v):v.toFixed(3)):String(v));
+function drawSample(){const id=IMG_IDS[curIdx],s=IMGS[id];document.getElementById('sampleSel').value=curIdx;
+  /* say which id is malformed: `Object.keys(undefined)` killed the whole viewer with a stack trace that
+     named neither the item nor the expected shape */
+  if(!s||!s.img) throw new Error(`media item "${id}" has no img panels — expected {id:{img:{panel:dataURI},m:{…}}}`);
+  const panelKeys=Object.keys(s.img),M=s.m||{};
+  /* Panel keys are user-facing copy (they get translated), so a quote or `&` in one used to break out of
+     the alt/src attribute and destroy the <img> tag. Attributes and URLs stay escaped — always. */
+document.getElementById('panels').innerHTML=panelKeys.map(pk=>
+    `<div class="panel"><div class="plabel">${escN(pk)}</div><img src="${escN(s.img[pk])}" alt="${escN(pk+' '+id)}"><div class="pmetric">${escN(fmtM(M[pk]))}</div></div>`).join('');
+  /* m is a free-form metric dict (as documented): a key matching a PANEL name renders under that panel,
+     every other key renders once in the item readout. Do not require a `<panel>_<metric>` naming scheme —
+     silently rendering nothing when the keys don't match that convention is how this went unnoticed. */
+  const rest=Object.keys(M).filter(k=>!panelKeys.includes(k));
+  document.getElementById('sampleMeta').innerHTML=rest.map(k=>`<span><b>${escN(k)}</b> ${escN(fmtM(M[k]))}</span>`).join('');}
+
+// tabs (preserve selected page in URL hash)
+function selectTab(pane){document.querySelectorAll('.tabs button').forEach(b=>{const on=b.dataset.pane===pane;b.classList.toggle('active',on);b.setAttribute('aria-selected',on);});
+  document.querySelectorAll('.pane').forEach(p=>p.hidden=p.id!==pane);}
+/* replaceState, NOT location.hash= : assigning the hash makes the browser jump to the pane element,
+   so clicking a tab would scroll the header out of view. replaceState keeps the URL shareable AND the
+   scroll position put. */
+/* Own the panels: role="tab"/role="tabpanel" without aria-controls/aria-labelledby leaves a screen
+   reader a tab list of six tabs that control nothing and six unlabelled panels. Wired here so the markup
+   stays copy-paste-able and a duplicated pane picks it up for free. */
+document.querySelectorAll('.tabs button').forEach(b=>{if(!b.id)b.id='tab-'+b.dataset.pane;
+  b.setAttribute('aria-controls',b.dataset.pane);
+  const p=document.getElementById(b.dataset.pane);if(p)p.setAttribute('aria-labelledby',b.id);});
+document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>{selectTab(b.dataset.pane);
+  history.replaceState(null,'','#'+b.dataset.pane);}));
+
+/* ===== Required dated-narrative component (notes + issues; exactly these two) =====
+   ONE renderer for both dated panes. The shell is a contract: even empty data validates the calendar,
+   filter, and card containers; only an empty ARRAY may hide the tab. */
+const NOTE_CONTRACTS={
+  'pane-notes':{kind:'experiment',statuses:['예정','진행 중','완료','중단','보류'],sections:['Decision Question','Hypothesis','Run Identity','Live Snapshot','Results','Interpretation','Decision']},
+  'pane-issues':{kind:'issue',statuses:['신규','조사 중','완화','모니터링','해결','차단'],sections:['Impact','Observed Symptom','Evidence','Hypotheses','Root Cause','Resolution','Verification','Closure']}
+};
+const NOTES=JSON.parse(document.getElementById('notesdata').textContent);
+const ISSUES=JSON.parse(document.getElementById('issuesdata').textContent);
+function noteView(listId,calId,filterId,data,contract){
+  if(!Array.isArray(data))throw new Error('Dated narrative data must be an array.');
+  const el=document.getElementById(listId), pane=el&&el.closest('.pane');
+  const cal=document.getElementById(calId), filt=document.getElementById(filterId);
+  const tabBtn=pane&&document.querySelector(`.tabs button[data-pane="${pane.id}"]`);
+  if(!pane||!tabBtn||!cal||!filt||!pane.matches('[data-component="dated-narrative"]')||!pane.querySelector('[data-dated-narrative-layout]')||!pane.querySelector('[data-dated-narrative-calendar] .notecal'))
+    throw new Error('Dated narrative requires the template calendar shell.');
+  if(!contract||!Array.isArray(contract.statuses)||!Array.isArray(contract.sections))
+    throw new Error(`Dated narrative pane ${pane.id} has no status/section contract.`);
+  if(!data.length)return;
+  const validDate=d=>{const m=String(d&&d.date).match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return false;
+    const dt=new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));return dt.getUTCFullYear()===+m[1]&&dt.getUTCMonth()===+m[2]-1&&dt.getUTCDate()===+m[3];};
+  const unknownMarkers=['미확정','해당 없음','확인 중','TODO'];
+  const meaningfulText=x=>{if(typeof x!=='string'||!x.trim())return false;const text=x.replace(/[`*_]/g,'').trim();
+    return unknownMarkers.every(marker=>!text.startsWith(marker)||!!text.slice(marker.length).replace(/^[\s\-—:：.;,]+/,'').trim());};
+  const scalar=x=>typeof x==='string'||typeof x==='boolean'||(typeof x==='number'&&Number.isFinite(x));
+  const meaningfulScalar=x=>typeof x==='string'?meaningfulText(x):scalar(x);
+  const validItems=x=>Array.isArray(x)&&x.length&&x.every(meaningfulText);
+  const validTable=t=>t&&Array.isArray(t.head)&&t.head.length&&
+    t.head.every((cell,i)=>meaningfulScalar(cell)||(i===0&&cell===''&&t.head.length>1))&&
+    Array.isArray(t.rows)&&t.rows.length&&t.rows.every(r=>Array.isArray(r)&&r.length===t.head.length&&
+      r.every(cell=>meaningfulScalar(cell)||cell==='해당 없음'))&&t.rows.some(r=>r.some(meaningfulScalar));
+  const validImages=x=>Array.isArray(x)&&x.length&&x.every(p=>p&&typeof p==='object'&&
+    typeof p.src==='string'&&p.src.startsWith('data:'));
+  const validatePayload=(s,where,allowBlocks)=>{if(!s||typeof s!=='object'||typeof s.h!=='string'||!s.h.trim())
+      throw new Error(`${contract.kind} ${where} requires a non-empty text heading.`);
+    const itemsOk=validItems,tableOk=validTable;
+    if('items'in s&&!itemsOk(s.items))throw new Error(`${contract.kind} ${where} has non-meaningful items: ${JSON.stringify(s.items)}.`);
+    if('table'in s&&!tableOk(s.table))throw new Error(`${contract.kind} ${where} has a malformed/non-meaningful table with empty, non-scalar, or exception-only content.`);
+    if('images'in s&&!validImages(s.images))throw new Error(`${contract.kind} ${where} has malformed images.`);
+    if('collapsed'in s&&typeof s.collapsed!=='boolean')throw new Error(`${contract.kind} ${where} has non-boolean collapsed.`);
+    const direct=itemsOk(s.items)||tableOk(s.table)||validImages(s.images);
+    let nested=false;
+    if('blocks'in s){if(!allowBlocks||!Array.isArray(s.blocks)||!s.blocks.length)
+        throw new Error(`${contract.kind} ${where} has malformed blocks.`);
+      nested=true;s.blocks.forEach((b,i)=>{if(b&&'blocks'in b)throw new Error(`${contract.kind} ${where}.blocks[${i}] cannot nest blocks.`);
+        validatePayload(b,`${where}.blocks[${i}]`,false);});}
+    if(!direct&&!nested)throw new Error(`${contract.kind} ${where} has no meaningful content.`);};
+  const containsUnknown=x=>unknownMarkers.some(marker=>String(x||'').replace(/[`*_]/g,'').includes(marker));
+  const supportedDirect=s=>(validItems(s.items)&&s.items.every(item=>!containsUnknown(item)))||validTable(s.table)||validImages(s.images);
+  data.forEach((d,i)=>{const label=`record ${i+1}${d&&typeof d.title==='string'?` "${d.title}"`:''}`;
+    if(!d||typeof d!=='object'||!validDate(d))throw new Error(`${contract.kind} ${label} requires a valid date.`);
+    if(typeof d.title!=='string'||!d.title.trim())throw new Error(`${contract.kind} ${label} title must be non-empty text.`);
+    if(typeof d.key!=='string'||!d.key.trim())throw new Error(`${contract.kind} ${label} key must be non-empty text.`);
+    if(!contract.statuses.includes(d.status))
+      throw new Error(`${contract.kind} ${label} has invalid status "${d.status}"; expected ${contract.statuses.join(' | ')}.`);
+    if(d.time!=null&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(String(d.time)))
+      throw new Error(`${contract.kind} ${label} has invalid time "${d.time}".`);
+    if(!Array.isArray(d.sections))throw new Error(`${contract.kind} ${label} sections must be an array.`);
+    d.sections.forEach((s,j)=>{if(!s||typeof s!=='object'||typeof s.h!=='string'||!s.h.trim())
+      throw new Error(`${contract.kind} ${label}.sections[${j}] heading must be non-empty text.`);});
+    const actual=d.sections.map(s=>s.h), expected=contract.sections;
+    if(actual.length!==expected.length||actual.some((h,j)=>h!==expected[j]))
+      throw new Error(`${contract.kind} ${label} section order must be exactly ${expected.join(' > ')}; got ${actual.join(' > ')}.`);
+    d.sections.forEach((s,j)=>validatePayload(s,`${label}.sections[${j}]`,true));
+    if(contract.kind==='issue'&&d.status==='해결'){
+      const by=Object.fromEntries(d.sections.map(s=>[s.h,s]));
+      ['Root Cause','Resolution','Verification','Closure'].forEach(h=>{if(!supportedDirect(by[h]))throw new Error(`issue ${label} resolved record requires supported non-unknown ${h}.`);});
+      if(!String((by.Closure.items||[])[0]||'').replace(/[`*_]/g,'').trim().startsWith('해결'))
+        throw new Error(`issue ${label} resolved Closure contradicts lifecycle status.`);
+    }});
+  tabBtn.hidden=false;
+  const pad=n=>String(n).padStart(2,'0');
+  // newest first, by date AND optional "HH:MM" time. Entries with no time sort last within their day
+  // (they predate time-stamping), so a same-day update always lands above the entry it supersedes.
+  const stampKey=d=>`${String(d.date)} ${/^\d{2}:\d{2}$/.test(String(d.time||''))?d.time:'00:00'}`;
+  const days=[...data].sort((a,b)=>stampKey(a)===stampKey(b)?0:(stampKey(a)<stampKey(b)?1:-1));
+  const noteDates=new Set(days.map(d=>String(d.date)));
+  const labelSection=h=>(COPY.record&&COPY.record.sectionLabels&&COPY.record.sectionLabels[h])||h;
+  const labelStatus=s=>(COPY.record&&COPY.record.statusLabels&&COPY.record.statusLabels[s])||s;
+  let selectedDate=null,selectedStatus='all';
+  const statusCounts=Object.fromEntries(contract.statuses.map(s=>[s,days.filter(d=>d.status===s).length]));
+  const statusRow=document.createElement('div');statusRow.className='fgroup note-status-row';
+  statusRow.innerHTML=`<span class="flab">${mdN(COPY.record&&COPY.record.status||'Status')}</span><div class="chips" data-filter="status">`+
+    [`<button class="chip" aria-pressed="true" data-val="all">${mdN(COPY.record&&COPY.record.all||'All')} (${days.length})</button>`]
+      .concat(contract.statuses.map(s=>`<button class="chip" aria-pressed="false" data-val="${escN(s)}">${mdN(labelStatus(s))} (${statusCounts[s]})</button>`)).join('')+`</div>`;
+  filt.before(statusRow);
+  // Cells render markdown like every other field. They used escN, so a **bold** number in a table
+  // showed its asterisks while the same markup worked in bullets — a silent inconsistency.
+  const tableHtml=t=>`<div class="dtwrap"><table class="datatable"><thead><tr>${(t.head||[]).map(h=>`<th>${mdN(h)}</th>`).join('')}</tr></thead><tbody>${(t.rows||[]).map(r=>`<tr>${(r||[]).map(c=>`<td>${mdN(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  /* Third section shape, for when the finding IS the picture (a before/after strip, a failure case, a
+     calibration ladder): {h, images:[{src,cap,sub}]}. Reuses the media viewer's .panels grid — one grid
+     system for panels in this file — inside .dtwrap so a wide strip scrolls in its own box, never the
+     page. `src` MUST be a data: URI; the artifact CSP blocks every external request, so a remote URL
+     renders nothing at all. cap/sub are prose (mdN); src/alt land in ATTRIBUTES so they take escN. */
+  const imagesHtml=list=>{const ps=(list||[]).filter(p=>p&&typeof p==='object');
+    if(!ps.length)return '';   // empty/missing array renders nothing, not an empty box
+    return `<div class="dtwrap"><div class="panels" style="margin-top:8px">${ps.map(p=>`<div class="panel">`+
+      `<div class="plabel">${mdN(p.cap||'')}</div>`+
+      /* alt strips the markdown MARKERS the caption may carry — a screen reader reading "star star
+         variant 1 star star" is the accessible equivalent of shipping literal asterisks to the page. */
+      (p.src?`<img src="${escN(p.src)}" alt="${escN(String(p.cap||'image').replace(/[*`]/g,''))}" loading="lazy">`
+            :`<div class="noimg">${mdN((COPY.viewer&&COPY.viewer.missingSrc)||'missing src')}</div>`)+
+      (p.sub?`<div class="pmetric">${mdN(p.sub)}</div>`:'')+
+      `</div>`).join('')}</div></div>`;};
+  const directBody=s=>`<div class="note-direct">${(s.items&&s.items.length)?`<ul>${s.items.map(i=>`<li>${mdN(i)}</li>`).join('')}</ul>`:''}${s.table?tableHtml(s.table):''}${s.images?imagesHtml(s.images):''}</div>`;
+  const blockHtml=b=>b.collapsed
+    ? `<details class="note-details"><summary>${mdN(b.h||'')}</summary>${directBody(b)}</details>`
+    : `<div class="note-block"><div class="note-block-h">${mdN(b.h||'')}</div>${directBody(b)}</div>`;
+  const secBody=s=>directBody(s)+(s.blocks||[]).map(blockHtml).join('');
+  const cardHtml=d=>`<div class="note-card" data-date="${escN(d.date)}" data-state="${escN(d.status)}">
+    <div class="note-head"><div class="note-title">${mdN(d.title||'')}</div><div class="note-meta">
+      <span class="status-badge" data-state="${escN(d.status)}">${mdN(labelStatus(d.status))}</span>
+      <span class="note-stamp">${escN(d.date||'')}${/^\d{2}:\d{2}$/.test(String(d.time||''))?`<span class="t">${escN(d.time)}</span>`:''}</span></div></div>
+    <div class="note-key">${mdN(d.key)}</div>
+    ${(d.sections||[]).map(s=>`<div class="note-section" style="margin-top:11px"><div class="note-sec-h">${mdN(labelSection(s.h||''))}</div>${secBody(s)}</div>`).join('')}
+  </div>`;
+  function renderNotes(){
+    const list=days.filter(d=>(!selectedDate||String(d.date)===selectedDate)&&
+      (selectedStatus==='all'||d.status===selectedStatus));
+    filt.hidden=!selectedDate;
+    if(selectedDate)filt.innerHTML=`${COPY.record&&COPY.record.dateFilter?COPY.record.dateFilter(escN(selectedDate),list.length):`<b>${escN(selectedDate)}</b> — ${list.length} ${list.length===1?'entry':'entries'} · `}<a data-all="1">${mdN(COPY.record&&COPY.record.showAllDates||'show all dates')}</a>`;
+    statusRow.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.val===selectedStatus?'true':'false'));
+    el.innerHTML=list.map(cardHtml).join('')||`<div class="chart-s notes-empty">${mdN(COPY.record&&COPY.record.noEntries||'No entries for the selected date and status.')}</div>`;
+    /* Clearing the date does not reset lifecycle status; the two filters always compose with AND. */
+    const sa=filt.querySelector('[data-all]');if(sa){sa.href='#';sa.onclick=e=>{e.preventDefault();selectedDate=null;drawCal();renderNotes();};}
+  }
+  statusRow.querySelector('[data-filter="status"]').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;
+    selectedStatus=b.dataset.val;renderNotes();};
+  const DOW=(COPY.record&&Array.isArray(COPY.record.weekdays)&&COPY.record.weekdays.length===7)?COPY.record.weekdays:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const p0=String(days[0].date).split('-').map(Number); let ym={y:p0[0],m:p0[1]-1};
+  function drawCal(){
+    const {y,m}=ym;
+    const startDow=new Date(Date.UTC(y,m,1)).getUTCDay();          // UTC: local parsing shifts days
+    const dim=new Date(Date.UTC(y,m+1,0)).getUTCDate();
+    let cells=DOW.map(d=>`<span class="notecal-dow">${d}</span>`).join('');
+    for(let i=0;i<startDow;i++) cells+='<span class="notecal-day"></span>';
+    for(let day=1;day<=dim;day++){
+      const ds=`${y}-${pad(m+1)}-${pad(day)}`, has=noteDates.has(ds), sel=selectedDate===ds;
+      cells+=`<button type="button" class="notecal-day${has?' has':''}${sel?' sel':''}"${has?` data-d="${ds}"`:' disabled'}>${day}</button>`;
+    }
+    cal.innerHTML=`<div class="notecal-head"><button type="button" class="notecal-nav" data-prev aria-label="${escN(COPY.record&&COPY.record.prevMonth||'Previous month')}">‹</button><div class="notecal-title">${new Date(Date.UTC(y,m,1)).toLocaleString((COPY.locale||'en-US'),{month:'long',year:'numeric',timeZone:'UTC'})}</div><button type="button" class="notecal-nav" data-next aria-label="${escN(COPY.record&&COPY.record.nextMonth||'Next month')}">›</button></div><div class="notecal-grid">${cells}</div>`;
+    cal.querySelector('[data-prev]').onclick=()=>{if(--ym.m<0){ym.m=11;ym.y--;}drawCal();};
+    cal.querySelector('[data-next]').onclick=()=>{if(++ym.m>11){ym.m=0;ym.y++;}drawCal();};
+    cal.querySelectorAll('.notecal-day.has').forEach(c=>c.onclick=()=>{selectedDate=selectedDate===c.dataset.d?null:c.dataset.d;drawCal();renderNotes();});
+  }
+  drawCal(); renderNotes();
+  NOTE_DATES[pane.id]=noteDates;
+  NOTEVIEWS[pane.id]=d=>{if(!noteDates.has(d))return;selectedDate=d;
+    const p=d.split('-');ym={y:+p[0],m:+p[1]-1};drawCal();renderNotes();};
+}
+/* Cross-pane note links: a plan row can point at the day it was worked on.
+   Any element with data-note-link="paneId:YYYY-MM-DD" switches to that pane AND filters its calendar. */
+const NOTEVIEWS={}, NOTE_DATES={};
+addEventListener('click',e=>{const a=e.target.closest('[data-note-link]');if(!a)return;e.preventDefault();
+  const [pane,date]=a.dataset.noteLink.split(':');const btn=document.querySelector(`.tabs button[data-pane="${pane}"]`);
+  if(!btn||btn.hidden)return; selectTab(pane); history.replaceState(null,'','#'+pane);
+  if(NOTEVIEWS[pane])NOTEVIEWS[pane](date); scrollTo(0,0);});
+
+/* Experiment plan / backlog: rows live in JSON, ONE renderer — a new experiment is a data edit.
+   row = {task, goal, status:'done'|'running'|'todo'|'blocked', date?, cost?, priority?, links?:[{pane,date,label}], note?} */
+function planView(tblId,rows){const t=document.getElementById(tblId);if(!t)return;
+  if(!Array.isArray(rows))throw new Error('Experiment plan data must be an array.');
+  const PILL=(COPY.plan&&COPY.plan.status)||{done:['ok','done'],running:['mid','running'],todo:['','todo'],blocked:['no','blocked']};
+  const malformed=rows.filter(r=>!r||!String(r.task||'').trim()||!String(r.goal||'').trim()||!PILL[r.status]);
+  if(malformed.length)throw new Error('Plan rows require task, goal, and status todo/running/done/blocked.');
+  const invalidLinks=rows.flatMap(r=>(r.links||[]).filter(l=>!l||!['pane-notes','pane-issues'].includes(l.pane)||
+    !/^\d{4}-\d{2}-\d{2}$/.test(String(l.date||''))||!NOTE_DATES[l.pane]||!NOTE_DATES[l.pane].has(l.date))
+    .map(l=>`${r.task}: ${l&&l.pane||'missing-pane'}:${l&&l.date||'missing-date'}`));
+  if(invalidLinks.length)throw new Error('Plan row has an invalid evidence link: '+invalidLinks.join(', '));
+  /* Evidence is mandatory for anything that produced a result: a finished/running row MUST link to a
+     real dated entry, so those states can never become unbacked assertions. */
+  const unbacked=rows.filter(r=>['done','running'].includes(r.status)&&!(r.links&&r.links.length));
+  if(unbacked.length)throw new Error('Plan rows marked done/running need an evidence link: '+
+    unbacked.map(r=>r.task).join(', '));
+  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const headers=(COPY.plan&&COPY.plan.headers)||['Task','Goal','Status','Cost','Priority','Evidence'];
+  t.querySelector('thead').innerHTML='<tr>'+headers.map(h=>`<th>${mdN(h)}</th>`).join('')+'</tr>';
+  /* Optional `group` field: rows carrying the same group render under one header row, so a backlog reads
+     as "which claim does this support", not a flat to-do list. Ungrouped rows just render in order. */
+  let lastGroup=null;
+  t.querySelector('tbody').innerHTML=rows.map(r=>{const [cls,lab]=PILL[r.status]||PILL.todo;
+    const links=(r.links||[]).map(l=>`<a class="notelink" data-note-link="${esc(l.pane)}:${esc(l.date)}">${mdN(l.label||l.date)}</a>`).join('');
+    let head='';
+    if(r.group&&r.group!==lastGroup){lastGroup=r.group;head=`<tr class="grouprow"><td colspan="6">${mdN(r.group)}</td></tr>`;}
+    /* Prose columns render markdown like every other surface. They used esc(), so a **bold** number in
+       a plan row shipped its literal asterisks to the browser while the same markup worked in the note
+       panes. Prose = task/note/goal/group/link label. Escaped: pane+date (they build the data-note-link
+       ATTRIBUTE) and cost/priority (mono figure columns, not prose). */
+    return head+`<tr class="${r.status==='done'?'done':''}"><td class="task">${mdN(r.task)}${r.note?`<span class="when">${mdN(r.note)}</span>`:''}</td>`+
+      `<td class="goal">${mdN(r.goal)}</td>`+
+      `<td><span class="pill ${cls}">${lab}</span>${r.date?`<span class="when">${esc(r.date)}</span>`:''}</td>`+
+      `<td class="cost">${esc(r.cost||'—')}</td><td class="cost">${esc(r.priority||'—')}</td>`+
+      `<td>${links||'<span class="cost">—</span>'}</td></tr>`;}).join('');
+  const pane=t.closest('.pane'),btn=pane&&document.querySelector(`.tabs button[data-pane="${pane.id}"]`);
+  if(btn&&rows.length)btn.hidden=false;}
+
+function showRecordFatal(error){const panel=document.getElementById('record-fatal');
+  panel.hidden=false;panel.innerHTML=`<strong>${mdN(COPY.record&&COPY.record.fatal||'Record data could not be rendered')}</strong><pre>${escN(error&&error.message||error)}</pre>`;}
+try{
+  noteView('notes','cal','notesFilter',NOTES,NOTE_CONTRACTS['pane-notes']);
+  noteView('issues','issuesCal','issuesFilter',ISSUES,NOTE_CONTRACTS['pane-issues']);
+  planView('planTbl',JSON.parse(document.getElementById('plandata').textContent));
+}catch(error){showRecordFatal(error);queueMicrotask(()=>{throw error;});}
+const _toTop=document.getElementById('toTop');
+if(_toTop){addEventListener('scroll',()=>_toTop.classList.toggle('show',scrollY>400),{passive:true});
+  /* the CSS reduced-motion block cannot override a behavior passed to scrollTo — check it here too */
+  _toTop.onclick=()=>scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'});}
+
+// draw + theme
+const root=document.documentElement;
+function draw(){if(!HAS_NUMERIC)return;bar('barA',METRICS[0].k);bar('barB',(METRICS[1]||METRICS[0]).k);dist('distA',METRICS[0].k);dist('distB',(METRICS[1]||METRICS[0]).k);delta();table();}
+document.getElementById('themeBtn').onclick=()=>{const dark=!(root.getAttribute('data-theme')==='dark'||(!root.getAttribute('data-theme')&&matchMedia('(prefers-color-scheme:dark)').matches));root.setAttribute('data-theme',dark?'dark':'light');draw();};
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(!root.getAttribute('data-theme'))draw();});
+draw();viewer();
+
+/* Hash restore runs LAST: noteView/planView/viewer decide which tabs exist, so restoring a deep link
+   before them could open a pane whose tab is hidden — a blank page with no visible way back. Matching on
+   dataset.pane instead of a selector keeps a hostile hash out of querySelector. */
+(function(){const id=location.hash.slice(1),btn=[...document.querySelectorAll('.tabs button')].find(b=>b.dataset.pane===id);
+  if(btn&&!btn.hidden&&btn.style.display!=='none'){selectTab(id);
+    /* The browser may apply the initial #pane-* anchor scroll after this script runs on fresh file:// loads.
+       Reset once the load event has completed, then one macrotask later, while keeping replaceState tab clicks. */
+    const top=()=>setTimeout(()=>scrollTo(0,0),0);
+    if(document.readyState==='complete')top();else addEventListener('load',top,{once:true});
+  }   /* open at the top, not scrolled to the panel anchor */
+})();
+
+/* GATE — the Record tab group is exactly Plan / Notes / Issues, in that order. It validates tabs AND
+   panels, so omitting data-component, duplicating an allowed id, or adding a flat/manual day-log cannot
+   bypass it. Components lives in the separate Build group and must still be deleted before publishing. */
+(function(){const expected=['pane-plan','pane-notes','pane-issues'];
+  const planBtn=document.querySelector('.tabs button[data-pane="pane-plan"]');
+  const group=planBtn&&planBtn.closest('.tabgroup');
+  const actual=group?[...group.children].filter(e=>e.matches('button[role="tab"]')).map(e=>e.dataset.pane):[];
+  const exact=actual.length===expected.length&&actual.every((v,i)=>v===expected[i]);
+  const oneEach=expected.every(id=>document.querySelectorAll(`#${id}`).length===1&&
+    document.querySelectorAll(`.tabs button[data-pane="${id}"]`).length===1);
+  const dated=[...document.querySelectorAll('[data-component="dated-narrative"]')].map(p=>p.id).sort();
+  const datedExact=dated.join(',')==='pane-issues,pane-notes';
+  if(!exact||!oneEach||!datedExact)throw new Error('Record tabs must be exactly pane-plan, pane-notes, pane-issues with one matching panel each.');})();
+</script>
