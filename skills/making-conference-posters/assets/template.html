@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Conference poster template. Everything that matters is a variable at the top.
-     Sheet: A0 only.  Portrait 84.1x118.9  ·  Landscape 118.9x84.1 (swap the two values).
-     Smaller sheets are deliberately not supported - see SKILL.md.
+     Sheet: A0 portrait, fixed. 84.1 x 118.9 cm. Do not change --sheet-w/h;
+     other sheets are deliberately not supported - see SKILL.md.
      --cols 3 is the verified value (2 untested; 4 cuts the banner heading and nothing reports it). -->
 <html>
 <head>
@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
 <style>
 :root{
-  --sheet-w: 84.1cm;
+  --sheet-w: 84.1cm;        /* A0 portrait - fixed, not a knob */
   --sheet-h: 118.9cm;
   --cols: 3;
   --s: 1;                 /* global type scale - audit_fit.py --scan-scale solves for this */

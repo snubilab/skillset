@@ -23,7 +23,7 @@ S=<this-skill>/scripts    # e.g. ~/.claude/skills/making-conference-posters/scri
 3. **Cut the assets.** One call per figure/table. Each prints the `aspect-ratio:` line to paste.
    `uv run --with pillow $S/extract_assets.py crop paper.pdf --page 11 --out fig1.png --box 252,148,1150,710 --ref-dpi 150`
    Add `--whole` first to eyeball a page and find the box, and **pass back the `--ref-dpi` that `--whole` prints** — its output is capped in width, so its pixels are not the dpi you asked for and a box measured on it lands somewhere else at any other value. Add `--text` for tables (1-bit PNG).
-4. **Lay out.** Copy `assets/template.html`. Set `--sheet-w/h` and `--acc`; leave `--cols` at 3 — it is the only value verified. At 4 the banner's fixed clip-path corner eats enough of a narrower column to cut the heading, and nothing reports it. Write content from the step-2 term list. Give each `<img>` the `aspect-ratio` from step 3. Name the section banners from the headings on that list, and take every size and spacing value from the template — do not type one inline.
+4. **Lay out.** Copy `assets/template.html`. The sheet is fixed at A0 portrait — do not touch `--sheet-w/h`. Set `--acc`; leave `--cols` at 3 — it is the only value verified. At 4 the banner's fixed clip-path corner eats enough of a narrower column to cut the heading, and nothing reports it. Write content from the step-2 term list. Give each `<img>` the `aspect-ratio` from step 3. Name the section banners from the headings on that list, and take every size and spacing value from the template — do not type one inline.
 5. **Audit.** Fix everything it reports, repeat until clean. A `--root` or `--card` selector matching nothing is an error, not a pass. Exit 0 alone is not clean: `DEAD SPACE` and `LETTERBOX` are report-only and never fail the exit code — read the output, do not gate on the status.
    `uv run $S/audit_fit.py poster.html --sheet 84.1x118.9 --root '#poster'`
 6. **Fit the type.** Sweeps `--s`, reports the largest that fits. Bake it in — after checking it, because the sweep is looser than the audit: it scores fit on its own threshold, so a box clipped by less than `--tol` reads as fitting. Re-run the plain audit at the scale it returns. If it reports that nothing fits, the block printed below that line was measured at `--s 1`, not at any scale you chose.
@@ -169,13 +169,15 @@ the work. Re-check them after every reorder, not once at the end.
 - **Do not multiply the source's numbers into one it never reports.** Two quantities do not license their product just because the units compose — least of all when they come from different analyses. If the product appears nowhere in the source, print the qualified numbers it does give, qualifiers attached, and let the source's own scaling claim carry the rest.
 - **A weakly reported statistic — a p-value with no named test, a relative-% gain on a bounded index — is still the source's number.** Transcribe it as-is and flag the gap to the author; the poster gets no annotation the source does not make (see the transcription table).
 
-## Sheet sizes (cm)
+## The sheet
 
-**A0 only.** Portrait `84.1×118.9`; landscape `118.9×84.1` — swap the two values. `--sheet`, the template's `--sheet-w/h` and `export_poster.sh` all take width first, and the sheet gates check the render against what you declared, in both directions.
+**A0 portrait, `84.1 × 118.9 cm`. Fixed.** It is baked into the template and repeated on every command line, and
+that repetition is the point: `audit_fit.py` and `export_poster.sh` both compare what the page actually rendered
+against the number you passed, and fail on a mismatch. That gate is what catches a stray `@page` edit — it is
+not a size option.
 
-Smaller sheets are **not supported**, deliberately. The type scale is a pure multiple of `--s`, so it survives scaling — but the template's banner height, card padding, border width and clip-path corners are absolute centimetres and do not scale with it, so below A0 the hierarchy stops being proportional while every geometric check still passes. Building an A1 or A2 poster from this template requires editing those literals, which is editing the design. If you need a smaller sheet, print an A0 layout scaled down, or take it to whoever owns the template.
-
-PowerPoint caps a slide at **142.24 cm**; `export_poster.sh` errors rather than silently shrinking (the PDF and PNG are still written).
+PowerPoint caps a slide at **142.24 cm**, comfortably above A0; `export_poster.sh` errors rather than silently
+shrinking if that is ever exceeded (the PDF and PNG are still written).
 
 ## Requirements
 
