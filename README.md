@@ -6,7 +6,7 @@
   <p><strong>반복되는 연구 작업을 재사용 가능한 실행 체계로.</strong></p>
   <p>
     <img src="https://img.shields.io/badge/SNU-BiLab-0F172A?style=for-the-badge" alt="SNU BiLab" />
-    <img src="https://img.shields.io/badge/Skills-2-2457FF?style=for-the-badge" alt="2 skills" />
+    <img src="https://img.shields.io/badge/Skills-3-2457FF?style=for-the-badge" alt="3 skills" />
     <img src="https://img.shields.io/badge/Focus-Research%20Workflow-0F766E?style=for-the-badge" alt="Research Workflow" />
   </p>
   <p>
@@ -42,6 +42,7 @@
 |---|---|---|---|
 | [`dashboard`](skills/dashboard) | 실험·평가 결과를 한눈에 보고 샘플 단위까지 탐색할 수 있는 단일 파일 대시보드를 제작합니다. | ML 실험, benchmark, audit, leaderboard, A/B test | Self-contained HTML |
 | [`minimal-scientific-svg`](skills/minimal-scientific-svg) | 논문과 발표 자료에 사용할 절제된 과학 도식을 편집 가능한 벡터로 제작하고 PPTX로 변환·검증합니다. | Workflow, architecture, clinical figure, conceptual diagram | Editable SVG / PPTX |
+| [`making-conference-posters`](skills/making-conference-posters) | 논문에서 A0 학회 포스터를 제작합니다. 실제 물리 크기로 조판하고 들어맞는지 **측정**한 뒤 인쇄용 PDF·PPTX로 내보냅니다. | Conference poster, A0 print | Print-ready PDF / PPTX |
 
 ## 🚀 Quick Start
 
