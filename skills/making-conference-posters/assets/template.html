@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<!-- Conference poster template. Everything that matters is a variable at the top.
+     Sheet: A0 only.  Portrait 84.1x118.9  ·  Landscape 118.9x84.1 (swap the two values).
+     Smaller sheets are deliberately not supported - see SKILL.md.
+     --cols 3 is the verified value (2 untested; 4 cuts the banner heading and nothing reports it). -->
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+<style>
+:root{
+  --sheet-w: 84.1cm;
+  --sheet-h: 118.9cm;
+  --cols: 3;
+  --s: 1;                 /* global type scale - audit_fit.py --scan-scale solves for this */
+  --acc: #2B367C;         /* accent: banners, card borders, stat tiles */
+  --acc-text: #F4EBC9;    /* text on accent */
+  --bg: #EDEEEF;          /* content area behind the cards */
+  --hl: #F7F2E2;          /* callout box */
+  --ink: #000000;         /* body text - keep near-black for print contrast */
+  --muted: #444444;
+  /* Every gap used at more than one site is declared here, once. Reference
+     these from the markup - never retype the number inline (it drifts). */
+  --gap-banner: 0.25cm;   /* banner to its card */
+  --gap-block: 0.85cm;    /* between blocks inside a card */
+  --gap-cap: 0.28cm;      /* caption to its figure or table */
+  --gap-head: 0.7cm;      /* stacks inside the header */
+}
+@page { size: var(--sheet-w) var(--sheet-h); margin: 0; }
+html,body{margin:0;padding:0}
+*{box-sizing:border-box}
+sup,sub{font-size:60%}
+
+#poster{width:var(--sheet-w);height:var(--sheet-h);display:flex;flex-direction:column;
+        background:#fff;color:var(--ink);font-weight:500;overflow:hidden;
+        font-family:Pretendard,-apple-system,sans-serif  /* STATIC, not Variable: see SKILL.md */}
+
+/* ---- header ---- */
+.head{flex-shrink:0;padding:1.4cm 2cm 0.9cm;display:flex;align-items:flex-start;gap:1.6cm}
+.title{font-size:calc(76pt * var(--s));font-weight:700;line-height:1.15;text-wrap:balance}
+.authors{font-size:calc(38pt * var(--s));line-height:1.3}
+.affil{font-size:calc(22pt * var(--s));line-height:1.4;color:var(--muted)}
+.venue{font-size:calc(23pt * var(--s));line-height:1.4;font-weight:700}
+.rule{flex-shrink:0;height:0.35cm;background:linear-gradient(90deg,#6539D1,#3F63FF 34%,#899FEE 48%,#61BAAD)}
+
+/* ---- columns ---- */
+.cols{flex:1;min-height:0;background:var(--bg);padding:1.6cm 2cm;
+      display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:1cm}
+/* minmax(0,1fr) not 1fr: plain 1fr refuses to shrink below min-content, so one
+   wide unbreakable string silently blows every column out of the sheet. */
+.col{display:flex;flex-direction:column;min-width:0;min-height:0;gap:1.2cm}
+
+.bnr{width:100%;height:4cm;flex-shrink:0;background:var(--acc);color:var(--acc-text);
+     clip-path:polygon(0 0,calc(100% - 3.4cm) 0,100% 100%,0 100%);
+     display:flex;align-items:center;padding:0 4.2cm 0 1.2cm;
+     font-size:calc(55pt * var(--s));font-weight:700;letter-spacing:0.04em}
+.card{background:#fff;border:0.14cm solid var(--acc);padding:1cm 1.15cm;min-width:0;
+      font-size:calc(29pt * var(--s))}
+.sec{font-size:calc(31pt * var(--s));font-weight:700;letter-spacing:0.04em;margin:0 0 0.3cm}
+.cap{font-size:calc(23pt * var(--s));font-weight:700}
+.note{font-size:calc(20pt * var(--s));line-height:1.35;color:var(--muted)}
+.b{line-height:1.3;padding-left:0.75em;text-indent:-0.75em;margin:0 0 0.45cm}
+.b:last-child{margin-bottom:0}
+/* ONE body size rules the sheet (.card). These are the only sanctioned
+   step-downs - never write an inline font-size. */
+.compact{font-size:calc(28pt * var(--s))}   /* one step down */
+.dense{font-size:calc(24pt * var(--s))}     /* two steps down - cut content before reaching here */
+.hl{background:var(--hl);padding:0.85cm 2.4cm 0.85cm 1cm;line-height:1.3;
+    clip-path:polygon(0 0,calc(100% - 2.2cm) 0,100% 2.8cm,100% 100%,0 100%)}
+
+/* headline numbers - stack label UNDER value so a long label cannot orphan */
+.stats{display:flex;flex-direction:column;gap:0.4cm}
+.stat{background:var(--acc);color:#fff;padding:0.55cm 1cm;display:flex;flex-direction:column;gap:0.1cm}
+.stat .n{font-size:calc(34pt * var(--s));font-weight:700;line-height:1.1}
+.stat .l{font-size:calc(20pt * var(--s));line-height:1.25;color:#D9DDF0}
+
+/* Set each box's height to width * (imgH/imgW) - extract_assets.py prints the
+   number. A wrong-aspect box either letterboxes (dead space) or crops. */
+.fig{display:block;width:100%;height:auto}   /* height solved from aspect-ratio below */
+/* Declare each figure's intrinsic ratio once. The browser then computes
+   height = column width x imgH/imgW, reserves the space before the image
+   loads, and stays correct if the column width ever changes.
+   extract_assets.py prints the exact `aspect-ratio:` line to paste. */
+#fig1{aspect-ratio:1351/695}
+#fig2{aspect-ratio:1800/1345}
+#tbl1{aspect-ratio:1697/1704}
+
+/* Let one figure span columns when its in-panel text would otherwise be tiny. */
+.span2{grid-column:span 2}
+
+.foot{position:relative;flex-shrink:0;height:7.1cm;background:#fff}
+.foot .bar{position:absolute;left:0;bottom:0;height:7.1cm;width:75.743%;  /* 63.7cm at A0 portrait */
+           background:var(--acc);color:#fff;
+           clip-path:polygon(0 0,100% 0,calc(100% - 2.4cm) 100%,0 100%);
+           display:flex;align-items:center;gap:1.8cm;padding:0 4.6cm 0 2cm}
+.foot .bar h4{margin:0;font-size:calc(36pt * var(--s));letter-spacing:0.05em;flex-shrink:0}
+.foot .bar p{margin:0;font-size:calc(21pt * var(--s));line-height:1.4}
+</style>
+</head>
+<body>
+<section id="poster">
+
+  <div class="head">
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--gap-head)">
+      <div class="title">PAPER TITLE HERE</div>
+      <div style="display:flex;flex-direction:column;gap:var(--gap-cap)">
+        <div class="authors">Author One<sup>1</sup>, Author Two<sup>2,*</sup></div>
+        <div class="affil"><sup>1</sup>Affiliation. <sup>2</sup>Affiliation. (*Corresponding)</div>
+        <div class="venue">Journal / Conference &middot; Code: github.com/...</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:var(--gap-head);flex-shrink:0">
+      <!-- <img src="society-logo.png" style="max-width:22cm;max-height:3.4cm;object-fit:contain"> -->
+      <!-- <img src="lab-logo.png" style="height:6.2cm"> -->
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <div class="cols">
+
+    <div class="col">
+      <div style="display:flex;flex-direction:column;gap:var(--gap-banner)">
+        <div class="bnr">INTRODUCTION</div>
+        <div class="card">
+          <p class="b">&bull; Problem and why it matters clinically or technically.</p>
+          <p class="b">&bull; What prior work does and where it breaks.</p>
+          <p class="b">&bull; The one idea this paper contributes.</p>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:var(--gap-banner);min-height:0">
+        <div class="bnr">METHOD</div>
+        <div class="card" style="flex:1;display:flex;flex-direction:column;gap:var(--gap-block);min-height:0">
+          <!-- Do NOT use justify-content:space-between here. It scatters leftover
+               space into large holes between blocks. Fill with content; --s is the last resort, not the first. -->
+          <div>
+            <div class="sec">DATA</div>
+            <div class="dense">
+              <p class="b">&bull; Source, size, split.</p>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:var(--gap-cap)">
+            <img id="fig1" class="fig" src="fig1.png" alt="Fig 1">
+            <div class="cap">Fig. 1) Method overview</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col" style="gap:var(--gap-banner)">
+      <div class="bnr">RESULTS</div>
+      <div class="card" style="flex:1;display:flex;flex-direction:column;gap:var(--gap-block);min-height:0">
+        <div>
+          <p class="b">&bull; What was compared and under what protocol.</p>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="n">0.000</div><div class="l">Headline metric</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:var(--gap-cap)">
+          <div class="cap">Table 1) What the table reports</div>
+          <img id="tbl1" class="fig" src="table1.png" alt="Table 1">
+        </div>
+        <div class="note">Caveat a reviewer would raise, answered honestly.</div>
+        <div class="hl compact">The one sentence a passer-by should leave with.</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card" style="display:flex;flex-direction:column;gap:var(--gap-cap)">
+        <img id="fig2" class="fig" src="fig2.png" alt="Fig 2">
+        <div class="cap">Fig. 2) Key result</div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:var(--gap-banner);min-height:0">
+        <div class="bnr">CONCLUSION</div>
+        <div class="card compact" style="flex:1">
+          <p class="b">&bull; What was built.</p>
+          <p class="b">&bull; What it beats and by how much.</p>
+          <p class="b">&bull; <b>Cost / limitation</b> - state it here, a reviewer will ask anyway.</p>
+          <p class="b">&bull; <b>Next:</b> where this goes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="bar">
+      <h4>ACKNOWLEDGEMENTS</h4>
+      <p>Grant numbers and funders, verbatim from the paper.</p>
+    </div>
+    <!-- <img src="lab-logo.png" style="position:absolute;right:1.9cm;bottom:1.2cm;height:4.6cm"> -->
+  </div>
+</section>
+</body>
+</html>
