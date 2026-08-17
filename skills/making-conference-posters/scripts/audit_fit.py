@@ -13,7 +13,7 @@ Exit code 1 if anything is clipped, mis-sized, or a resource failed, so it can
 gate a build. A selector that matches nothing is an ERROR, never a silent pass.
 
 Usage:
-  S=~/.claude/skills/making-conference-posters/scripts
+  S=<this-skill>/scripts   # wherever this skill is installed
   uv run $S/audit_fit.py poster.html --sheet 84.1x118.9 --root '#poster'
   uv run $S/audit_fit.py poster.html --sheet 84.1x118.9 --root '#poster' --scan-scale
 """

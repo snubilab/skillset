@@ -9,7 +9,7 @@ style out of the DOM, then re-emit them as PPTX shapes at the same physical
 coordinates. Chrome has already done all the layout maths, so nothing is
 re-derived from the CSS.
 
-  S=~/.claude/skills/making-conference-posters/scripts
+  S=<this-skill>/scripts   # wherever this skill is installed
   uv run --with python-pptx $S/html_to_pptx.py poster.html --sheet 84.1x118.9 \
       --root '#poster' --out poster-editable.pptx
 

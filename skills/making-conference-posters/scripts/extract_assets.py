@@ -7,7 +7,7 @@ returns only the raster layer, so you silently get a figure with no labels.
 Rendering the page and cropping keeps both layers.
 
 Usage:
-  S=~/.claude/skills/making-conference-posters/scripts
+  S=<this-skill>/scripts   # wherever this skill is installed
 
   # 1. see what is on which page
   uv run --with pillow $S/extract_assets.py survey paper.pdf

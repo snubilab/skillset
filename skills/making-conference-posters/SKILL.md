@@ -9,10 +9,10 @@ Build the poster as HTML at true physical size, **measure** that it fits, then e
 
 **Core principle: a poster is a layout that either fits or does not. Never judge fit by looking at a screenshot — measure it.** A poster viewed at 30% zoom hides a 15 cm overflow; the printer will not.
 
-The scripts are not on `PATH`. Set this once:
+The scripts are not on `PATH`. Point `S` at wherever this skill is installed — a user-level install lives under `~/.claude/skills/`, a project or shared-repo install under the project's own `.claude/skills/` or its checkout — and set it once:
 
 ```bash
-S=~/.claude/skills/making-conference-posters/scripts
+S=<this-skill>/scripts    # e.g. ~/.claude/skills/making-conference-posters/scripts
 ```
 
 ## Workflow
@@ -26,7 +26,7 @@ S=~/.claude/skills/making-conference-posters/scripts
 4. **Lay out.** Copy `assets/template.html`. Set `--sheet-w/h` and `--acc`; leave `--cols` at 3 — it is the only value verified. At 4 the banner's fixed clip-path corner eats enough of a narrower column to cut the heading, and nothing reports it. Write content from the step-2 term list. Give each `<img>` the `aspect-ratio` from step 3. Name the section banners from the headings on that list, and take every size and spacing value from the template — do not type one inline.
 5. **Audit.** Fix everything it reports, repeat until clean. A `--root` or `--card` selector matching nothing is an error, not a pass. Exit 0 alone is not clean: `DEAD SPACE` and `LETTERBOX` are report-only and never fail the exit code — read the output, do not gate on the status.
    `uv run $S/audit_fit.py poster.html --sheet 84.1x118.9 --root '#poster'`
-6. **Fit the type.** Sweeps `--s`, reports the largest that fits. Bake it in.
+6. **Fit the type.** Sweeps `--s`, reports the largest that fits. Bake it in — after checking it, because the sweep is looser than the audit: it scores fit on its own threshold, so a box clipped by less than `--tol` reads as fitting. Re-run the plain audit at the scale it returns. If it reports that nothing fits, the block printed below that line was measured at `--s 1`, not at any scale you chose.
    `uv run $S/audit_fit.py poster.html --sheet 84.1x118.9 --root '#poster' --scan-scale`
 7. **Export.** PDF (vector text — print this), PNG, PPTX.
    `bash $S/export_poster.sh poster.html 84.1 118.9 myposter`
@@ -159,7 +159,8 @@ the work. Re-check them after every reorder, not once at the end.
 
 - **Dead space is content debt, not a layout bug.** >3 cm empty at a card's bottom usually means you over-trimmed, not that gaps need stretching.
 - **Put the source's stated costs on the poster** — runtime, failure modes, the metric where a baseline wins. A reviewer finds them anyway. **Then re-check the number's arithmetic against the source before printing it.**
-- **Body text ≥ 24 pt, title ~70–80 pt.** These are A0 numbers and A0 is the only supported sheet. If content only fits below the floor, cut content.
+- **Body text ≥ 24 pt, title ~70–80 pt.** These are A0 numbers and A0 is the only supported sheet. If content only fits below the floor, cut content **The floor binds `--s`, and the sweep does not know that:** the template's body class is 29 pt, so 24 pt is `--s ≥ 0.83`, and the `.dense` step-down is 24 pt at `--s 1`, so any block using `.dense` needs `--s ≥ 1.0`. `--scan-scale` sweeps down to 0.80 and will report a scale below your floor as "largest that fits" — check the pt before you bake it in.
+- **The extractor's ceiling and the audit's dpi floor can trap you.** Crops render at a fixed source dpi and are capped in width, so magnification is bounded: a region narrower than roughly a third of the printed placement width lands under the 150 dpi floor, and spanning columns makes it worse, not better — the same pixels stretched across more centimetres. A single-column float from a two-column paper placed across one A0 column is already near the floor. Shrink the placement, re-crop a tighter region, or re-typeset it.
 - **A dense figure in a narrow column is unreadable even when it "fits."** A wide multi-panel figure squeezed into a single column renders its in-panel text far below the body-size floor. Span columns (`.span2`) or crop to the panels that carry the argument.
 - **An image of a table is not a table.** A table cropped from the paper's page prints its digits *smaller* than your own smallest poster type, carries the paper's serif hairlines, and converts to 4-colour black (registration fringing). Re-typeset natively unless exactness against the paper matters more — and if you capture it, check the source table's own bolding before you inherit its errors.
 - **Inventory the source's floats before you write a word.** List every figure and table in the paper and mark which ones the poster uses; the unused ones are the answer to any column that later reads sparse.
